@@ -12,7 +12,7 @@ Item {
         contentHeight: content.implicitHeight + 50
         ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
         ColumnLayout { id: content; x: 24; y: 22; width: parent.width-48; spacing: 16
-            Text { text: "Ustawienia urządzenia"; font.pixelSize: Math.max(11, Math.round(30 * backend.fontScale / 100)); font.bold: true; color: Theme.text }
+            Text { text: "Ustawienia urządzenia"; font.pixelSize: Math.max(11, Math.round(25 * backend.fontScale / 100)); font.bold: true; color: Theme.text }
             Text { text: "Wszystkie dane pozostają na tablecie. Żadne zadania nie są wysyłane do internetu.";
                 font.pixelSize: Math.max(11, Math.round(14 * backend.fontScale / 100)); color: Theme.muted; Layout.fillWidth: true; wrapMode: Text.WordWrap }
             Rectangle { Layout.fillWidth: true; Layout.preferredHeight: appearance.implicitHeight+35;
@@ -20,9 +20,9 @@ Item {
                 ColumnLayout { id: appearance; anchors.fill: parent; anchors.margins: 16; spacing: 10
                     Text { text: "Wygląd i czytelność"; font.pixelSize: Math.max(11, Math.round(20 * backend.fontScale / 100)); font.bold: true; color: Theme.text }
                     RowLayout { Layout.fillWidth: true; spacing: 8
-                        ActionButton { text: "☀ Jasny"; primary: backend.themeMode === "light"; onClicked: backend.setThemeMode("light") }
-                        ActionButton { text: "☾ Ciemny"; primary: backend.themeMode === "dark"; onClicked: backend.setThemeMode("dark") }
-                        ActionButton { text: "◷ Auto"; primary: backend.themeMode === "auto"; onClicked: backend.setThemeMode("auto") }
+                        ActionButton { text: "Jasny"; primary: backend.themeMode === "light"; onClicked: backend.setThemeMode("light") }
+                        ActionButton { text: "Ciemny"; primary: backend.themeMode === "dark"; onClicked: backend.setThemeMode("dark") }
+                        ActionButton { text: "Auto"; primary: backend.themeMode === "auto"; onClicked: backend.setThemeMode("auto") }
                     }
                     Text { text: "Tryb automatyczny: 21:00–07:00 według zegara tabletu.";
                         color: Theme.muted; font.pixelSize: Math.max(11, Math.round(12 * backend.fontScale / 100)) }
@@ -43,12 +43,14 @@ Item {
                         var path=backend.backupNow(); page.feedback=path ? "Zapisano: "+path : backend.errorMessage
                         page.backups=backend.availableBackups()
                     } }
-                    RowLayout { Layout.fillWidth: true
-                        FormInput { id: usbDir; Layout.fillWidth: true; placeholderText: "Folder pendrive, np. E:\\" }
-                        ActionButton { text: "Eksportuj na USB"; compact: true; primary: false;
+                    ColumnLayout { Layout.fillWidth: true; spacing: 8
+                        FormInput { id: usbDir; Layout.fillWidth: true;
+                            placeholderText: "Folder pendrive, np. E:\\" }
+                        ActionButton { text: "Eksportuj na USB"; Layout.fillWidth: true;
+                            compact: true; primary: false;
                             onClicked: {
                                 var output=backend.backupToDirectory(usbDir.text)
-                                page.feedback=output ? "Zapisano kopię USB: "+output : backend.errorMessage
+                                page.feedback=output ? "Zapisano kopi\u0119 USB: "+output : backend.errorMessage
                                 page.backups=backend.availableBackups()
                             } }
                     }
@@ -65,10 +67,11 @@ Item {
                     }
                     ActionButton { text: "Odśwież listę kopii"; compact: true; primary: false;
                         onClicked: page.backups=backend.availableBackups() }
-                    RowLayout { Layout.fillWidth: true
+                    ColumnLayout { Layout.fillWidth: true; spacing: 8
                         FormInput { id: restoreFromUsb; Layout.fillWidth: true;
-                            placeholderText: "Ścieżka do kopii na USB, np. E:\\domowy-plan-....json" }
-                        ActionButton { text: "Otwórz kopię USB"; compact: true; primary: false;
+                            placeholderText: "\u015acie\u017cka do kopii, np. E:\\kopia.json" }
+                        ActionButton { text: "Otw\u00f3rz kopi\u0119 USB"; Layout.fillWidth: true;
+                            compact: true; primary: false;
                             onClicked: { page.restorePath = restoreFromUsb.text; confirmRestore.open() } }
                     }
                 }
@@ -77,7 +80,7 @@ Item {
                 radius: 16; color: Theme.surface; border.color: Theme.border
                 ColumnLayout { id: infoContent; anchors.fill: parent; anchors.margins: 16; spacing: 10
                     Text { text: "Informacje techniczne"; font.pixelSize: Math.max(11, Math.round(20 * backend.fontScale / 100)); font.bold: true; color: Theme.text }
-                    Text { text: "Wersja 0.4.0 · Qt 5.15.2 · Windows x86"; color: Theme.text; font.pixelSize: Math.max(11, Math.round(14 * backend.fontScale / 100)) }
+                    Text { text: "Wersja 0.4.1 · Qt 5.15.2 · Windows x86"; color: Theme.text; font.pixelSize: Math.max(11, Math.round(14 * backend.fontScale / 100)) }
                     Text { text: "Baza SQLite: " + backend.databasePath;
                         color: Theme.muted; Layout.fillWidth: true; wrapMode: Text.WrapAnywhere; font.pixelSize: Math.max(11, Math.round(13 * backend.fontScale / 100)) }
                     Text { text: "Rozmiar pliku bazy: " + Math.ceil(backend.databaseBytes/1024) + " KB";
@@ -99,7 +102,7 @@ Item {
         x: (page.width-width)/2; y: (page.height-height)/2; standardButtons: Dialog.Yes | Dialog.No
         onAccepted: { if (backend.restoreBackup(page.restorePath)) page.feedback="Przywrócono kopię.";
             else page.feedback=backend.errorMessage }
-        contentItem: Text { width: 340; color: Theme.text; wrapMode: Text.WordWrap;
+        contentItem: Text { width: Math.min(340, page.width - 76); color: Theme.text; wrapMode: Text.WordWrap;
             text: "Zastąpisz wszystkie bieżące zadania, zakupy i szablony zawartością wybranej kopii JSON." }
     }
 }

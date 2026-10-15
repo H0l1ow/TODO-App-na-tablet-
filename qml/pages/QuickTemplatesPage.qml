@@ -13,21 +13,20 @@ Item {
         function onDataChanged() { page.categoryRows = backend.categories; page.taskRows = backend.quickTemplates(page.categoryId) }
     }
     ColumnLayout { anchors.fill: parent; anchors.margins: 24; spacing: 14
-        RowLayout { Layout.fillWidth: true
-            ColumnLayout { Layout.fillWidth: true
-                Text { text: "Szybkie zadania i szablony"; font.pixelSize: Math.max(11, Math.round(27 * backend.fontScale / 100)); font.bold: true; color: Theme.text }
-                Text { text: "Edytuj skróty dostępne w kuchennym panelu. Bez zmian w QML.";
-                    color: Theme.muted; font.pixelSize: Math.max(11, Math.round(14 * backend.fontScale / 100)) }
+        ColumnLayout { Layout.fillWidth: true; spacing: 8
+            Text { text: "Szybkie zadania i szablony"; font.pixelSize: 24; font.bold: true;
+                color: Theme.text; Layout.fillWidth: true; wrapMode: Text.WordWrap }
+            RowLayout { Layout.fillWidth: true; spacing: 9
+                ActionButton { text: "+ Kategoria"; Layout.fillWidth: true; primary: false; onClicked: {
+                    categoryEditor.editId = -1; categoryEditor.open()
+                } }
+                ActionButton { text: "+ Czynno\u015b\u0107"; Layout.fillWidth: true; onClicked: {
+                    taskEditor.editId = -1; taskEditor.open()
+                } }
             }
-            ActionButton { text: "+ Kategoria"; primary: false; onClicked: {
-                categoryEditor.editId = -1; categoryEditor.open()
-            } }
-            ActionButton { text: "+ Czynność"; onClicked: {
-                taskEditor.editId = -1; taskEditor.open()
-            } }
         }
-        RowLayout { Layout.fillWidth: true; Layout.fillHeight: true; spacing: 14
-            Rectangle { Layout.preferredWidth: 235; Layout.fillHeight: true; color: Theme.surfaceMuted;
+        ColumnLayout { Layout.fillWidth: true; Layout.fillHeight: true; spacing: 10
+            Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 205; color: Theme.surfaceMuted;
                 border.color: Theme.border; radius: 16
                 ColumnLayout { anchors.fill: parent; anchors.margins: 12; spacing: 12
                     Text { text: "KATEGORIE"; font.bold: true; font.pixelSize: Math.max(11, Math.round(13 * backend.fontScale / 100)); color: Theme.muted }
@@ -75,7 +74,7 @@ Item {
         Text { text: feedback; color: Theme.accent; font.pixelSize: Math.max(11, Math.round(13 * backend.fontScale / 100)); Layout.fillWidth: true }
     }
     Dialog { id: categoryEditor; property int editId: -1; title: editId > 0 ? "Edytuj kategorię" : "Nowa kategoria"
-        modal: true; width: 400; x: (page.width-width)/2; y: (page.height-height)/2;
+        modal: true; width: Math.min(400, page.width - 24); x: (page.width-width)/2; y: (page.height-height)/2;
         standardButtons: Dialog.NoButton; background: Rectangle { radius: 17; color: Theme.surface; border.color: Theme.border }
         onOpened: {
             var data = page.categoryRows.filter(function(c) { return c.id === editId })
@@ -101,7 +100,7 @@ Item {
         }
     }
     Dialog { id: taskEditor; property int editId: -1; title: editId > 0 ? "Edytuj szybkie zadanie" : "Nowe szybkie zadanie"
-        modal: true; width: 480; x: (page.width-width)/2; y: (page.height-height)/2;
+        modal: true; width: Math.min(480, page.width - 24); x: (page.width-width)/2; y: (page.height-height)/2;
         standardButtons: Dialog.NoButton; background: Rectangle { radius: 17; color: Theme.surface; border.color: Theme.border }
         onOpened: {
             var all = page.taskRows.filter(function(t) { return t.id === editId })

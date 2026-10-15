@@ -21,14 +21,15 @@ Item {
         contentWidth: width; contentHeight: content.implicitHeight + 42
         ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
         ColumnLayout { id: content; x: 24; y: 21; width: scroll.width-48; spacing: 16
-            RowLayout { Layout.fillWidth: true
-                ColumnLayout { Layout.fillWidth: true
-                    Text { text: "Plan i kalendarz"; font.pixelSize: Math.max(11, Math.round(30 * backend.fontScale / 100)); font.bold: true; color: Theme.text }
-                    Text { text: "Zaplanuj, powtarzaj, kopiuj lub edytuj zadania."; font.pixelSize: Math.max(11, Math.round(14 * backend.fontScale / 100)); color: Theme.muted }
+            ColumnLayout { Layout.fillWidth: true; spacing: 8
+                Text { text: "Plan i kalendarz"; font.pixelSize: 25; font.bold: true; color: Theme.text }
+                RowLayout { Layout.fillWidth: true; spacing: 8
+                    Text { text: "Wybierz dzie\u0144 i zaplanuj zadania."; Layout.fillWidth: true;
+                        font.pixelSize: 13; color: Theme.muted; wrapMode: Text.WordWrap }
+                    ActionButton { text: monthVisible ? "Tydzie\u0144" : "Miesi\u0105c"; compact: true; primary: false;
+                        onClicked: page.monthVisible = !page.monthVisible }
                 }
-                ActionButton { text: monthVisible ? "Tydzień" : "Miesiąc"; primary: false;
-                    onClicked: page.monthVisible = !page.monthVisible }
-                ActionButton { text: "+ Nowe zadanie"; onClicked: newTask() }
+                ActionButton { text: "+ Nowe zadanie"; Layout.fillWidth: true; onClicked: newTask() }
             }
             Rectangle { Layout.fillWidth: true; Layout.preferredHeight: page.monthVisible ? 430 : 122;
                 radius: 17; color: Theme.surface; border.color: Theme.border
@@ -76,30 +77,35 @@ Item {
                     }
                 }
             }
-            RowLayout { Layout.fillWidth: true; spacing: 8
-                Text { text: "Wybrana data:"; color: Theme.muted; font.pixelSize: Math.max(11, Math.round(13 * backend.fontScale / 100)) }
-                FormInput { id: dateJump; text: page.selectedDate; Layout.preferredWidth: 155 }
-                ActionButton { text: "Przejdź"; compact: true; primary: false; onClicked: {
-                    if (backend.dateLabel(dateJump.text).length) page.selectedDate = dateJump.text
-                    else page.statusMessage = "Niepoprawna data."
-                } }
-                Item { Layout.fillWidth: true }
-                ActionButton { text: "Szybkie zadanie"; compact: true; primary: false; onClicked: {
+            ColumnLayout { Layout.fillWidth: true; spacing: 8
+                RowLayout { Layout.fillWidth: true; spacing: 8
+                    Text { text: "Data:"; color: Theme.muted; font.pixelSize: 13 }
+                    FormInput { id: dateJump; Layout.fillWidth: true; text: page.selectedDate }
+                    ActionButton { text: "Poka\u017c"; compact: true; primary: false; onClicked: {
+                        if (backend.dateLabel(dateJump.text).length) page.selectedDate = dateJump.text
+                        else page.statusMessage = "Niepoprawna data."
+                    } }
+                }
+                ActionButton { Layout.fillWidth: true; text: "Szybkie zadanie"; primary: false; onClicked: {
                     quickTask.targetDate = page.selectedDate; quickTask.selectedMemberId = -1; quickTask.open()
                 } }
             }
             Rectangle { Layout.fillWidth: true; Layout.preferredHeight: dayColumn.implicitHeight+35;
                 color: Theme.surface; radius: 16; border.color: Theme.border
                 ColumnLayout { id: dayColumn; anchors.fill: parent; anchors.margins: 18; spacing: 10
-                    RowLayout { Layout.fillWidth: true
-                        Text { text: backend.dateLabel(selectedDate); font.pixelSize: Math.max(11, Math.round(20 * backend.fontScale / 100)); font.bold: true;
-                            color: Theme.text; Layout.fillWidth: true }
-                        ActionButton { text: "Kopiuj dzień"; compact: true; primary: false; onClicked: {
-                            copyDay.sourceDate = page.selectedDate; copyDay.open()
-                        } }
-                        ActionButton { text: "Szablon dnia"; compact: true; primary: false; onClicked: {
-                            templateDialog.targetDate = page.selectedDate; templateDialog.open()
-                        } }
+                    ColumnLayout { Layout.fillWidth: true; spacing: 9
+                        Text { text: backend.dateLabel(selectedDate); font.pixelSize: 18; font.bold: true;
+                            color: Theme.text; Layout.fillWidth: true; wrapMode: Text.WordWrap }
+                        RowLayout { Layout.fillWidth: true; spacing: 8
+                            ActionButton { text: "Kopiuj dzie\u0144"; compact: true; primary: false;
+                                Layout.fillWidth: true; onClicked: {
+                                    copyDay.sourceDate = page.selectedDate; copyDay.open()
+                                } }
+                            ActionButton { text: "Szablon dnia"; compact: true; primary: false;
+                                Layout.fillWidth: true; onClicked: {
+                                    templateDialog.targetDate = page.selectedDate; templateDialog.open()
+                                } }
+                        }
                     }
                     Text { visible: page.entries.length === 0; text: "Brak zaplanowanych zadań. Możesz wstawić szablon dnia.";
                         color: Theme.muted; font.pixelSize: Math.max(11, Math.round(15 * backend.fontScale / 100)); Layout.fillWidth: true; wrapMode: Text.WordWrap }

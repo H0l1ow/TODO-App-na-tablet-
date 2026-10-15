@@ -69,7 +69,7 @@ Assert-X86 (Join-Path $qtBin 'Qt5Core.dll')
 $cmake = (Get-Command cmake.exe -ErrorAction Stop).Source
 $build = Join-Path $repo 'out\build-win32-release'
 $stage = Join-Path $repo 'out\package-win32\DomowyPlan'
-$zip = Join-Path $repo 'out\DomowyPlan-Win32-x86-v0.3.zip'
+$zip = Join-Path $repo 'out\DomowyPlan-Win32-x86-v0.4.1.zip'
 $oldPath = $env:PATH
 $env:PATH = $qtBin + ';' + $gccBin + ';' + $oldPath
 try {
@@ -91,11 +91,68 @@ try {
     if (Test-Path -LiteralPath $stage) { Remove-Item -LiteralPath $stage -Recurse -Force }
     New-Item -ItemType Directory -Path $stage -Force | Out-Null
     Copy-Item -LiteralPath $exe -Destination (Join-Path $stage 'DomowyPlan.exe')
-    Invoke-Checked $windeploy @(
+    # Qt 5.15.2 MinGW 32-bit may misclassify qwindows.dll as a debug
+    # plugin and abort windeployqt with "Unable to find the platform plugin."
+    # First use Qt's normal deployment tool. Fall back to copying the known
+    # matching x86 Qt runtime, QML modules and plugins from QtRoot.
+    $platformSource = Join-Path $QtRoot 'plugins\platforms\qwindows.dll'
+    if (!(Test-Path -LiteralPath $platformSource -PathType Leaf)) {
+        throw ('Qt Windows platform plugin not found: ' + $platformSource + '. Check Qt 5.15.2 mingw81_32 installation.')
+    }
+    Assert-X86 $platformSource
+    $deployArgs = @(
+        '--qmake', $qmake,
         '--release', '--compiler-runtime', '--no-translations',
         '--qmldir', (Join-Path $repo 'qml'),
         (Join-Path $stage 'DomowyPlan.exe')
     )
+    Write-Host ('> ' + $windeploy + ' ' + ($deployArgs -join ' '))
+    & $windeploy @deployArgs
+    $deployExitCode = $LASTEXITCODE
+    if ($deployExitCode -ne 0) {
+        Write-Warning ('windeployqt failed (exit ' + $deployExitCode + '). Trying full local Qt x86 deployment fallback.')
+        Write-Warning 'Fallback includes more Qt files than needed, so the ZIP can be larger.'
+
+        # Copy every Qt 5 DLL from the matching 32-bit kit. This avoids
+        # missing runtime dependencies of nested QML plugins.
+        $qtLibraries = @(Get-ChildItem -LiteralPath $qtBin -File -Filter 'Qt5*.dll')
+        if ($qtLibraries.Count -eq 0) { throw ('No Qt5 DLL files found: ' + $qtBin) }
+        foreach ($library in $qtLibraries) {
+            Assert-X86 $library.FullName
+            Copy-Item -LiteralPath $library.FullName -Destination $stage -Force
+        }
+        foreach ($extra in @('libEGL.dll', 'libGLESv2.dll', 'opengl32sw.dll',
+                              'd3dcompiler_47.dll', 'zlib1.dll')) {
+            $source = Join-Path $qtBin $extra
+            if (Test-Path -LiteralPath $source -PathType Leaf) {
+                Assert-X86 $source
+                Copy-Item -LiteralPath $source -Destination $stage -Force
+            }
+        }
+
+        # Keep exact plugin directory structure: platforms/qwindows.dll,
+        # sqldrivers/qsqlite.dll, imageformats, styles, etc.
+        foreach ($part in @('plugins', 'qml')) {
+            $sourceDir = Join-Path $QtRoot $part
+            if (!(Test-Path -LiteralPath $sourceDir -PathType Container)) {
+                throw ('Required Qt component folder missing: ' + $sourceDir)
+            }
+            $targetDir = if ($part -eq 'plugins') { $stage } else { Join-Path $stage 'qml' }
+            if (!(Test-Path -LiteralPath $targetDir)) {
+                New-Item -ItemType Directory -Path $targetDir -Force | Out-Null
+            }
+            Get-ChildItem -LiteralPath $sourceDir -Force | ForEach-Object {
+                Copy-Item -LiteralPath $_.FullName -Destination $targetDir -Recurse -Force
+            }
+        }
+        Write-Host 'Full Qt 5.15.2 x86 fallback deployment finished.' -ForegroundColor Green
+    }
+    # Even with a successful windeployqt execution, confirm qwindows.dll.
+    $platformTarget = Join-Path $stage 'platforms\qwindows.dll'
+    if (!(Test-Path -LiteralPath $platformTarget -PathType Leaf)) {
+        New-Item -ItemType Directory -Path (Split-Path -Parent $platformTarget) -Force | Out-Null
+        Copy-Item -LiteralPath $platformSource -Destination $platformTarget -Force
+    }
 
     # QSQLITE is loaded dynamically: make its presence explicit, even when
     # windeployqt does not discover the SQLite driver automatically.

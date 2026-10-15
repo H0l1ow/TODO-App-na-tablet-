@@ -3,7 +3,7 @@ import QtQuick.Controls 2.12
 import QtQuick.Layouts 1.12
 import "."
 
-// Always-visible category and action lists; no radial geometry or animations.
+// Portrait friendly: compact, horizontally scrollable categories and a single list.
 Popup {
     id: root
     property string targetDate: backend.today
@@ -12,114 +12,130 @@ Popup {
     property var assigneeOptions: []
     property string statusMessage: ""
     property int addedCount: 0
-    readonly property var categories: [{"id": 0, "name": "★ Najczęstsze", "symbol": "★"}].concat(backend.categories)
+    readonly property var categories: [{"id": 0, "name": "Najcz\u0119stsze", "symbol": "\u2606"}].concat(backend.categories)
     property var templates: backend.quickTemplates(categoryId)
     onCategoryIdChanged: templates = backend.quickTemplates(categoryId)
     Connections { target: backend; function onDataChanged() { root.templates = backend.quickTemplates(root.categoryId) } }
     modal: true; dim: true; focus: true
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
-    width: Math.min(830, (parent ? parent.width : 870) - 24)
-    height: Math.min(650, (parent ? parent.height : 680) - 24)
-    x: parent ? (parent.width-width)/2 : 0
-    y: parent ? (parent.height-height)/2 : 0
-    padding: 17
-    background: Rectangle { radius: 19; color: Theme.surface; border.color: Theme.border }
+    width: Math.min(620, (parent ? parent.width : 680) - 20)
+    height: Math.min(690, (parent ? parent.height : 730) - 20)
+    x: parent ? (parent.width - width) / 2 : 0
+    y: parent ? (parent.height - height) / 2 : 0
+    padding: 14
+    background: Rectangle { radius: 16; color: Theme.surface; border.color: Theme.border }
 
     onOpened: {
-        categoryId = 0; addedCount = 0; statusMessage = ""
+        categoryId = 0
+        addedCount = 0
+        statusMessage = ""
         assigneeOptions = backend.assignees
-        var idx = 0
-        for (var i=0; i<assigneeOptions.length; ++i)
-            if (assigneeOptions[i].id === selectedMemberId) idx = i
-        quickAssignee.currentIndex = idx
+        var index = 0
+        for (var i = 0; i < assigneeOptions.length; ++i)
+            if (assigneeOptions[i].id === selectedMemberId) index = i
+        quickAssignee.currentIndex = index
         categoryList.positionViewAtBeginning()
         templateList.positionViewAtBeginning()
     }
     function addPreset(id, title) {
-        var idx = quickAssignee.currentIndex
-        var person = idx >= 0 && idx < assigneeOptions.length ? assigneeOptions[idx].id : -1
+        var index = quickAssignee.currentIndex
+        var person = index >= 0 && index < assigneeOptions.length ? assigneeOptions[index].id : -1
         if (backend.addFromQuickTemplate(id, targetDate, person)) {
             ++addedCount
-            statusMessage = "✓ Dodano: " + title
-        } else statusMessage = "Nie udało się dodać zadania."
+            statusMessage = "Dodano: " + title
+        } else statusMessage = backend.errorMessage || "Nie uda\u0142o si\u0119 doda\u0107 zadania."
     }
+
     contentItem: ColumnLayout {
-        spacing: 12
+        spacing: 10
         RowLayout {
             Layout.fillWidth: true
-            Text { text: "Szybkie zadania"; font.pixelSize: Math.max(11, Math.round(24 * backend.fontScale / 100)); font.bold: true; color: Theme.text; Layout.fillWidth: true }
-            ActionButton { text: "Zamknij ×"; compact: true; primary: false; onClicked: root.close() }
+            Text { text: "Szybkie zadania"; color: Theme.text;
+                font.bold: true; font.pixelSize: 20; Layout.fillWidth: true }
+            ActionButton { text: "Zamknij"; compact: true; primary: false; onClicked: root.close() }
         }
-        Text { Layout.fillWidth: true; text: "Dotknij kategorii, a następnie gotowej czynności. Możesz dodać kilka zadań kolejno.";
-               color: Theme.muted; font.pixelSize: Math.max(11, Math.round(14 * backend.fontScale / 100)); wrapMode: Text.WordWrap }
-        RowLayout {
-            Layout.fillWidth: true; Layout.fillHeight: true; spacing: 12
-            Rectangle {
-                Layout.preferredWidth: Math.min(225, Math.max(185, root.width * 0.28))
-                Layout.fillHeight: true; radius: 14; color: Theme.surfaceMuted; border.color: Theme.border
-                ListView {
-                    id: categoryList; anchors.fill: parent; anchors.margins: 9; clip: true; spacing: 8
-                    model: root.categories; boundsBehavior: Flickable.StopAtBounds
-                    ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
-                    delegate: Button {
-                        id: categoryButton
-                        width: ListView.view ? ListView.view.width - 8 : 180; height: 56
-                        text: modelData.name
-                        background: Rectangle { radius: 11; color: categoryButton.down || root.categoryId === modelData.id ? Theme.accentSoft : Theme.surface;
-                            border.color: root.categoryId === modelData.id ? Theme.accent : Theme.border;
-                            border.width: root.categoryId === modelData.id ? 2 : 1 }
-                        contentItem: Text { text: modelData.symbol + "  " + categoryButton.text; color: Theme.text;
-                            font.pixelSize: Math.max(11, Math.round(15 * backend.fontScale / 100)); font.bold: root.categoryId === modelData.id;
-                            verticalAlignment: Text.AlignVCenter; leftPadding: 12; elide: Text.ElideRight }
-                        onClicked: { root.categoryId = modelData.id; templateList.positionViewAtBeginning() }
-                    }
-                }
-            }
-            Rectangle {
-                Layout.fillWidth: true; Layout.fillHeight: true; radius: 14; color: Theme.surface; border.color: Theme.border
-                ColumnLayout {
-                    anchors.fill: parent; anchors.margins: 12; spacing: 8
-                    Text { text: "Gotowe czynności"; font.pixelSize: Math.max(11, Math.round(18 * backend.fontScale / 100)); color: Theme.text; font.bold: true; Layout.fillWidth: true }
-                    ListView {
-                        id: templateList; Layout.fillWidth: true; Layout.fillHeight: true; clip: true; spacing: 8
-                        model: root.templates; boundsBehavior: Flickable.StopAtBounds
-                        ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
-                        delegate: RowLayout {
-                            width: ListView.view ? ListView.view.width - 8 : 350; height: 58; spacing: 7
-                            Button {
-                                id: addButton
-                                Layout.fillWidth: true; Layout.preferredHeight: 56
-                                text: modelData.title
-                                background: Rectangle { radius: 12; color: addButton.down ? Theme.accentSoft : Theme.surfaceMuted; border.color: Theme.border }
-                                contentItem: Text { text: addButton.text + "  +"; color: Theme.text; font.pixelSize: Math.max(11, Math.round(16 * backend.fontScale / 100));
-                                    leftPadding: 13; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight }
-                                onClicked: root.addPreset(modelData.id, modelData.title)
-                            }
-                            Button {
-                                Layout.preferredWidth: 52; Layout.preferredHeight: 55
-                                text: modelData.favorite ? "★" : "☆"
-                                contentItem: Text { text: parent.text; color: Theme.accent; font.pixelSize: Math.max(11, Math.round(23 * backend.fontScale / 100));
-                                    horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
-                                background: Rectangle { radius: 11; color: Theme.surfaceMuted; border.color: Theme.border }
-                                onClicked: backend.toggleQuickFavorite(modelData.id)
-                            }
-                        }
-                    }
-                    Text { text: "Brak pozycji. Dodaj własne w zakładce Szablony."; visible: root.templates.length === 0;
-                        font.pixelSize: Math.max(11, Math.round(13 * backend.fontScale / 100)); color: Theme.muted; wrapMode: Text.WordWrap; Layout.fillWidth: true }
-                }
-            }
-        }
-        RowLayout {
-            Layout.fillWidth: true; spacing: 12
-            Text { text: "Dla kogo?"; font.pixelSize: Math.max(11, Math.round(14 * backend.fontScale / 100)); color: Theme.muted }
-            ComboBox { id: quickAssignee; Layout.fillWidth: true; Layout.preferredHeight: 50;
-                model: root.assigneeOptions; textRole: "name"; font.pixelSize: Math.max(11, Math.round(15 * backend.fontScale / 100)) }
-        }
-        RowLayout {
+        Text { text: "1. Wybierz kategori\u0119"; color: Theme.muted; font.pixelSize: 13 }
+        ListView {
+            id: categoryList
             Layout.fillWidth: true
-            Text { text: root.statusMessage; color: Theme.accent; Layout.fillWidth: true; font.pixelSize: Math.max(11, Math.round(13 * backend.fontScale / 100)); elide: Text.ElideRight }
-            ActionButton { text: "Gotowe (" + root.addedCount + ")"; onClicked: root.close() }
+            Layout.preferredHeight: 49
+            orientation: ListView.Horizontal
+            clip: true
+            spacing: 7
+            model: root.categories
+            boundsBehavior: Flickable.StopAtBounds
+            delegate: Button {
+                id: categoryButton
+                width: Math.max(116, Math.min(156, categoryLabel.implicitWidth + 23))
+                height: 46
+                background: Rectangle {
+                    radius: 10
+                    color: root.categoryId === modelData.id ? Theme.accentSoft : Theme.surfaceMuted
+                    border.color: root.categoryId === modelData.id ? Theme.accent : Theme.border
+                }
+                contentItem: Text {
+                    id: categoryLabel
+                    text: modelData.name
+                    font.pixelSize: 13
+                    font.bold: root.categoryId === modelData.id
+                    color: Theme.text
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
+                    elide: Text.ElideRight
+                }
+                onClicked: { root.categoryId = modelData.id; templateList.positionViewAtBeginning() }
+            }
         }
+        Text { text: "2. Dotknij zadania"; color: Theme.muted; font.pixelSize: 13 }
+        ListView {
+            id: templateList
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            clip: true
+            spacing: 7
+            model: root.templates
+            boundsBehavior: Flickable.StopAtBounds
+            ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
+            delegate: RowLayout {
+                width: ListView.view ? ListView.view.width - 5 : 350
+                height: 54
+                spacing: 7
+                Button {
+                    id: addButton
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 52
+                    text: modelData.title
+                    background: Rectangle { color: addButton.down ? Theme.accentSoft : Theme.surfaceMuted;
+                        border.color: Theme.border; radius: 10 }
+                    contentItem: RowLayout {
+                        spacing: 9
+                        Text { text: addButton.text; Layout.fillWidth: true;
+                            color: Theme.text; font.pixelSize: 15; elide: Text.ElideRight }
+                        Text { text: "+"; color: Theme.accent; font.pixelSize: 17; font.bold: true }
+                    }
+                    onClicked: root.addPreset(modelData.id, modelData.title)
+                }
+                Button {
+                    id: favoriteButton
+                    Layout.preferredWidth: 45
+                    Layout.preferredHeight: 52
+                    text: modelData.favorite ? "\u2605" : "\u2606"
+                    background: Rectangle { radius: 10; color: Theme.surfaceMuted; border.color: Theme.border }
+                    contentItem: Text { text: favoriteButton.text; font.pixelSize: 17;
+                        color: Theme.accent; horizontalAlignment: Text.AlignHCenter;
+                        verticalAlignment: Text.AlignVCenter }
+                    onClicked: backend.toggleQuickFavorite(modelData.id)
+                }
+            }
+        }
+        Text { text: "Brak czynno\u015bci w tej kategorii."; visible: root.templates.length === 0;
+            color: Theme.muted; font.pixelSize: 14; Layout.fillWidth: true }
+        Text { text: "Przypisz do:"; color: Theme.muted; font.pixelSize: 13 }
+        ComboBox { id: quickAssignee; Layout.fillWidth: true; Layout.preferredHeight: 45;
+            model: root.assigneeOptions; textRole: "name"; font.pixelSize: 14 }
+        Text { text: root.statusMessage; Layout.fillWidth: true; color: Theme.accent;
+            font.pixelSize: 13; elide: Text.ElideRight }
+        ActionButton { text: "Gotowe (" + root.addedCount + ")"; Layout.fillWidth: true;
+            onClicked: root.close() }
     }
 }

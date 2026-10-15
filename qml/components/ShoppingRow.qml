@@ -11,7 +11,7 @@ Item {
     signal checkRequested(int itemId, bool bought)
     signal removeRequested(int itemId)
     signal quantityRequested(int itemId, string newQuantity)
-    implicitHeight: 67
+    implicitHeight: 63
     function changedQuantity(delta) {
         var q = (item.quantity || "").trim()
         var match = /^(\d+)(.*)$/.exec(q)
@@ -20,15 +20,15 @@ Item {
         root.quantityRequested(item.id, "" + Math.max(1,num+delta) + unit)
     }
     RowLayout { anchors.fill: parent; spacing: 9
-        Rectangle { Layout.preferredWidth: 49; Layout.preferredHeight: 49; radius: 12;
+        Rectangle { Layout.preferredWidth: 43; Layout.preferredHeight: 43; radius: 11;
             border.color: item.bought ? Theme.accent : Theme.border; border.width: 2;
             color: item.bought ? Theme.accent : Theme.surfaceMuted
             Text { anchors.centerIn: parent; text: "✓"; visible: !!item.bought;
-                font.pixelSize: Math.max(11, Math.round(22 * backend.fontScale / 100)); font.bold: true; color: Theme.accentText }
+                font.pixelSize: Math.max(11, Math.round(17 * backend.fontScale / 100)); font.bold: true; color: Theme.accentText }
             MouseArea { anchors.fill: parent; onClicked: root.checkRequested(root.item.id, !root.item.bought) }
         }
         ColumnLayout { Layout.fillWidth: true; spacing: 2
-            Text { text: root.item.name || ""; font.pixelSize: Math.max(11, Math.round(16 * backend.fontScale / 100)); font.bold: !root.item.bought;
+            Text { text: root.item.name || ""; font.pixelSize: Math.max(11, Math.round(15 * backend.fontScale / 100)); font.bold: !root.item.bought;
                 font.strikeout: !!root.item.bought; color: root.item.bought ? Theme.muted : Theme.text;
                 elide: Text.ElideRight; Layout.fillWidth: true }
             Text { text: root.item.category || ""; font.pixelSize: Math.max(11, Math.round(11 * backend.fontScale / 100)); color: Theme.muted; Layout.fillWidth: true;
@@ -37,7 +37,7 @@ Item {
         ActionButton { text: "−"; compact: true; primary: false; implicitWidth: 44;
             visible: root.canAdjust; onClicked: root.changedQuantity(-1) }
         Text { text: root.item.quantity || "1"; font.pixelSize: Math.max(11, Math.round(14 * backend.fontScale / 100)); color: Theme.text;
-            Layout.preferredWidth: root.canAdjust ? 49 : 50; horizontalAlignment: Text.AlignHCenter; elide: Text.ElideRight }
+            Layout.preferredWidth: root.canAdjust ? 39 : 42; horizontalAlignment: Text.AlignHCenter; elide: Text.ElideRight }
         ActionButton { text: "+"; compact: true; primary: false; implicitWidth: 44;
             visible: root.canAdjust; onClicked: root.changedQuantity(1) }
         ActionButton { text: "×"; compact: true; primary: false; danger: true; implicitWidth: 44;

@@ -217,9 +217,11 @@ bool Backend::createTask(const QString &title, const QString &startDate, const Q
     q.addBindValue(nullableId(memberId)); q.addBindValue(isoNow());
     q.addBindValue(intervalDays > 0 ? intervalDays : 1);
     q.addBindValue(endDate.isEmpty() ? QVariant(QVariant::String) : QVariant(endDate));
-    q.addBindValue(note); q.addBindValue(nullableId(categoryId));
-    q.addBindValue(recurrence == "interval" || recurrence == "monthly" ? recurrence : QString());
-    q.addBindValue(dueTime);
+    q.addBindValue(note.isNull() ? QStringLiteral("") : note); q.addBindValue(nullableId(categoryId));
+    // schedule_kind has NOT NULL constraint: QString() is a NULL QString in Qt.
+    // Use a real empty string for ordinary schedules.
+    q.addBindValue(recurrence == "interval" || recurrence == "monthly" ? recurrence : QStringLiteral(""));
+    q.addBindValue(dueTime.isNull() ? QStringLiteral("") : dueTime);
     if (!q.exec()) { reportError(q.lastError().text()); return false; }
     setUndo("add_task", {{"id", q.lastInsertId()}}, QStringLiteral("Cofnij dodanie zadania"));
     changed(); return true;
@@ -242,9 +244,11 @@ bool Backend::editTask(int taskId, const QString &title, const QString &startDat
     q.addBindValue(recurrence == "weekly" ? weekdayMask : 0);
     q.addBindValue(nullableId(memberId)); q.addBindValue(intervalDays > 0 ? intervalDays : 1);
     q.addBindValue(endDate.isEmpty() ? QVariant(QVariant::String) : QVariant(endDate));
-    q.addBindValue(note); q.addBindValue(nullableId(categoryId));
-    q.addBindValue(recurrence == "interval" || recurrence == "monthly" ? recurrence : QString());
-    q.addBindValue(dueTime);
+    q.addBindValue(note.isNull() ? QStringLiteral("") : note); q.addBindValue(nullableId(categoryId));
+    // schedule_kind has NOT NULL constraint: QString() is a NULL QString in Qt.
+    // Use a real empty string for ordinary schedules.
+    q.addBindValue(recurrence == "interval" || recurrence == "monthly" ? recurrence : QStringLiteral(""));
+    q.addBindValue(dueTime.isNull() ? QStringLiteral("") : dueTime);
     q.addBindValue(taskId);
     if (!q.exec() || q.numRowsAffected() != 1) { reportError(QStringLiteral("Nie można edytować zadania.")); return false; }
     m_undoLabel.clear(); m_undoKind.clear();

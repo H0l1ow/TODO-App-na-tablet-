@@ -18,15 +18,15 @@ Item {
     Flickable { anchors.fill: parent; clip: true; contentWidth: width; contentHeight: content.implicitHeight + 55
         ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
         ColumnLayout { id: content; x: 24; y: 20; width: parent.width-48; spacing: 16
-            RowLayout { Layout.fillWidth: true
-                ColumnLayout { Layout.fillWidth: true
-                    Text { text: "Lista zakupów"; font.pixelSize: Math.max(11, Math.round(30 * backend.fontScale / 100)); font.bold: true; color: Theme.text }
-                    Text { text: "Najczęstsze produkty dodasz jednym dotknięciem.";
-                        color: Theme.muted; font.pixelSize: Math.max(11, Math.round(14 * backend.fontScale / 100)) }
+            ColumnLayout { Layout.fillWidth: true; spacing: 7
+                Text { text: "Lista zakup\u00f3w"; font.pixelSize: 25; font.bold: true; color: Theme.text }
+                RowLayout { Layout.fillWidth: true
+                    Text { text: "Dodaj produkty jednym dotkni\u0119ciem."; Layout.fillWidth: true;
+                        color: Theme.muted; font.pixelSize: 13; wrapMode: Text.WordWrap }
+                    ActionButton { text: "Pon\u00f3w"; primary: false; compact: true;
+                        onClicked: { var r=backend.repeatRecentShopping(7);
+                            page.info = r.ok ? "Dodano " + r.added + " produkt\u00f3w." : "Brak zakup\u00f3w do ponowienia." } }
                 }
-                ActionButton { text: "Ponów zakupy z 7 dni"; primary: false; compact: true;
-                    onClicked: { var r=backend.repeatRecentShopping(7);
-                        page.info = r.ok ? "Dodano " + r.added + " produktów." : "Brak zakupów do ponowienia." } }
             }
             Rectangle { Layout.fillWidth: true; Layout.preferredHeight: quickContent.implicitHeight + 30;
                 radius: 17; color: Theme.accentSoft; border.color: Theme.border
@@ -36,7 +36,7 @@ Item {
                             color: Theme.accent; font.bold: true; font.pixelSize: Math.max(11, Math.round(16 * backend.fontScale / 100)) }
                         ActionButton { text: "Edytuj katalog"; compact: true; primary: false; onClicked: productDialog.open() }
                     }
-                    Flow { Layout.fillWidth: true; height: Math.ceil(Math.min(12,page.catalog.length)/3)*58;
+                    Flow { Layout.fillWidth: true; Layout.preferredHeight: Math.max(56, childrenRect.height + 4);
                         spacing: 7
                         Repeater { model: Math.min(12,page.catalog.length)
                             delegate: ActionButton { text: "+ " + page.catalog[index].name; compact: true;
@@ -52,22 +52,26 @@ Item {
                 radius: 16; color: Theme.surface; border.color: Theme.border
                 ColumnLayout { id: listContent; anchors.fill: parent; anchors.margins: 18; spacing: 12
                     Text { text: "Dodaj własny produkt"; color: Theme.text; font.pixelSize: Math.max(11, Math.round(18 * backend.fontScale / 100)); font.bold: true }
-                    RowLayout { Layout.fillWidth: true; spacing: 9
-                        FormInput { id: productInput; Layout.fillWidth: true; placeholderText: "Nazwa produktu";
-                            maximumLength: 120; onAccepted: addProduct() }
-                        FormInput { id: quantityInput; Layout.preferredWidth: 105; placeholderText: "Ilość"; maximumLength: 40;
-                            onAccepted: addProduct() }
-                        ComboBox { id: categoryPicker; Layout.preferredWidth: 145; Layout.preferredHeight: 50;
-                            model: page.groceryCategories }
-                        ActionButton { text: "+ Dodaj"; onClicked: addProduct() }
+                    ColumnLayout { Layout.fillWidth: true; spacing: 8
+                        RowLayout { Layout.fillWidth: true; spacing: 8
+                            FormInput { id: productInput; Layout.fillWidth: true; placeholderText: "Nazwa produktu";
+                                maximumLength: 120; onAccepted: addProduct() }
+                            FormInput { id: quantityInput; Layout.preferredWidth: 78;
+                                placeholderText: "Ilo\u015b\u0107"; maximumLength: 40; onAccepted: addProduct() }
+                        }
+                        RowLayout { Layout.fillWidth: true; spacing: 8
+                            ComboBox { id: categoryPicker; Layout.fillWidth: true; Layout.preferredHeight: 47;
+                                model: page.groceryCategories }
+                            ActionButton { text: "Dodaj"; onClicked: addProduct() }
+                        }
                     }
                     CheckBox { id: rememberProduct; text: "Zapamiętaj produkt w katalogu"; checked: true; font.pixelSize: Math.max(11, Math.round(13 * backend.fontScale / 100)) }
-                    RowLayout { Layout.fillWidth: true
+                    ColumnLayout { Layout.fillWidth: true; spacing: 7
                         Text { text: "Do kupienia (" + backend.dashboard.shopping + ")";
-                            Layout.fillWidth: true; font.pixelSize: Math.max(11, Math.round(19 * backend.fontScale / 100)); font.bold: true; color: Theme.text }
-                        ComboBox { Layout.preferredWidth: 160; Layout.preferredHeight: 47;
+                            font.pixelSize: 18; font.bold: true; color: Theme.text }
+                        ComboBox { Layout.fillWidth: true; Layout.preferredHeight: 44;
                             model: ["Wszystkie"].concat(page.groceryCategories)
-                            onCurrentTextChanged: page.groupFilter=currentText }
+                            onCurrentTextChanged: page.groupFilter = currentText }
                     }
                     Text { text: "Lista jest pusta."; visible: page.products.length === 0;
                         Layout.fillWidth: true; font.pixelSize: Math.max(11, Math.round(14 * backend.fontScale / 100)); color: Theme.muted }
@@ -93,9 +97,11 @@ Item {
                 radius: 16; color: Theme.surface; border.color: Theme.border
                 ColumnLayout { id: setsContent; anchors.fill: parent; anchors.margins: 17; spacing: 12
                     Text { text: "Zestawy zakupowe"; color: Theme.text; font.pixelSize: Math.max(11, Math.round(20 * backend.fontScale / 100)); font.bold: true }
-                    RowLayout { Layout.fillWidth: true
-                        FormInput { id: setName; Layout.fillWidth: true; placeholderText: "Np. Cotygodniowe zakupy"; maximumLength: 70 }
-                        ActionButton { text: "Zapisz listę jako zestaw"; compact: true; primary: false;
+                    ColumnLayout { Layout.fillWidth: true; spacing: 7
+                        FormInput { id: setName; Layout.fillWidth: true;
+                            placeholderText: "Np. Cotygodniowe zakupy"; maximumLength: 70 }
+                        ActionButton { text: "Zapisz list\u0119 jako zestaw"; compact: true;
+                            primary: false; Layout.fillWidth: true;
                             onClicked: { if (backend.saveShoppingSet(setName.text)) { page.info="Zapisano zestaw."; setName.clear() }
                                 else page.info=backend.errorMessage } }
                     }
@@ -135,14 +141,18 @@ Item {
         background: Rectangle { color: Theme.surface; radius: 17; border.color: Theme.border }
         contentItem: ColumnLayout { spacing: 10
             Text { text: "Dodaj lub zaktualizuj ulubiony produkt."; color: Theme.muted; font.pixelSize: Math.max(11, Math.round(13 * backend.fontScale / 100)) }
-            RowLayout { Layout.fillWidth: true
-                FormInput { id: catalogName; Layout.fillWidth: true; placeholderText: "Nazwa"; maximumLength: 120 }
-                FormInput { id: catalogQuantity; Layout.preferredWidth: 80; placeholderText: "Ilość"; maximumLength: 40 }
-                ComboBox { id: catalogCategory; Layout.preferredWidth: 135; model: page.groceryCategories }
-                ActionButton { text: "Zapisz"; compact: true; onClicked: {
-                    if (backend.saveCatalogProduct(catalogName.text,catalogCategory.currentText,catalogQuantity.text,true))
-                        { catalogName.clear(); catalogQuantity.clear() }
-                } }
+            ColumnLayout { Layout.fillWidth: true; spacing: 8
+                RowLayout { Layout.fillWidth: true; spacing: 7
+                    FormInput { id: catalogName; Layout.fillWidth: true; placeholderText: "Nazwa"; maximumLength: 120 }
+                    FormInput { id: catalogQuantity; Layout.preferredWidth: 75; placeholderText: "Ilo\u015b\u0107"; maximumLength: 40 }
+                }
+                RowLayout { Layout.fillWidth: true; spacing: 7
+                    ComboBox { id: catalogCategory; Layout.fillWidth: true; model: page.groceryCategories }
+                    ActionButton { text: "Zapisz"; compact: true; onClicked: {
+                        if (backend.saveCatalogProduct(catalogName.text,catalogCategory.currentText,catalogQuantity.text,true))
+                            { catalogName.clear(); catalogQuantity.clear() }
+                    } }
+                }
             }
             ListView { Layout.fillWidth: true; Layout.fillHeight: true; model: page.catalog; clip: true; spacing: 4
                 delegate: RowLayout { width: ListView.view ? ListView.view.width-5 : 540; height: 50

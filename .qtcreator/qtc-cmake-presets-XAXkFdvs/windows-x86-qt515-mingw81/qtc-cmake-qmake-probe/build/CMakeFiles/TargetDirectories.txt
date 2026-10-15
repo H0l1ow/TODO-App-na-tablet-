@@ -1,2 +1,0 @@
-C:/Projects/DomowyPlan-v0.2/.qtcreator/qtc-cmake-presets-XAXkFdvs/windows-x86-qt515-mingw81/qtc-cmake-qmake-probe/build/CMakeFiles/edit_cache.dir
-C:/Projects/DomowyPlan-v0.2/.qtcreator/qtc-cmake-presets-XAXkFdvs/windows-x86-qt515-mingw81/qtc-cmake-qmake-probe/build/CMakeFiles/rebuild_cache.dir

@@ -12,7 +12,7 @@ Item {
         contentHeight: content.implicitHeight + 48;
         ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
         ColumnLayout { id: content; x: 24; y: 22; width: parent.width-48; spacing: 16
-            Text { text: "Domownicy"; font.pixelSize: Math.max(11, Math.round(30 * backend.fontScale / 100)); font.bold: true; color: Theme.text }
+            Text { text: "Domownicy"; font.pixelSize: Math.max(11, Math.round(25 * backend.fontScale / 100)); font.bold: true; color: Theme.text }
             Text { text: "Lokalne profile bez logowania. „Wszyscy” oznacza jeden wspólny obowiązek.";
                 font.pixelSize: Math.max(11, Math.round(14 * backend.fontScale / 100)); color: Theme.muted; Layout.fillWidth: true; wrapMode: Text.WordWrap }
             Rectangle { Layout.fillWidth: true; Layout.preferredHeight: editorRow.implicitHeight+36;
@@ -29,10 +29,10 @@ Item {
                     radius: 16; color: Theme.surface; border.color: Theme.border
                     ColumnLayout { id: memberContent; anchors.fill: parent; anchors.margins: 15; spacing: 10
                         RowLayout { Layout.fillWidth: true; spacing: 12
-                            Rectangle { Layout.preferredWidth: 53; Layout.preferredHeight: 53; radius: 26;
+                            Rectangle { Layout.preferredWidth: 42; Layout.preferredHeight: 42; radius: 21;
                                 color: modelData.color
                                 Text { anchors.centerIn: parent; text: modelData.initial;
-                                    color: "#365446"; font.pixelSize: Math.max(11, Math.round(24 * backend.fontScale / 100)); font.bold: true }
+                                    color: "#365446"; font.pixelSize: Math.max(11, Math.round(16 * backend.fontScale / 100)); font.bold: true }
                             }
                             ColumnLayout { Layout.fillWidth: true; spacing: 4
                                 Text { text: modelData.name; color: Theme.text; font.pixelSize: Math.max(11, Math.round(20 * backend.fontScale / 100)); font.bold: true }

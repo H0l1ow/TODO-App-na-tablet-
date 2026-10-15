@@ -13,8 +13,8 @@ Dialog {
     signal saved()
     title: taskId > 0 ? "Edytuj zadanie" : "Nowe zadanie"
     modal: true; dim: true; focus: true
-    width: Math.min(680, (parent ? parent.width : 720) - 28)
-    height: Math.min(690, (parent ? parent.height : 730) - 24)
+    width: Math.min(600, (parent ? parent.width : 640) - 20)
+    height: Math.min(700, (parent ? parent.height : 730) - 20)
     x: parent ? (parent.width-width)/2 : 0
     y: parent ? (parent.height-height)/2 : 0
     padding: 18
@@ -91,7 +91,7 @@ Dialog {
                 Row { visible: repeat.currentIndex === 2; spacing: 5
                     Repeater { model: ["Pn", "Wt", "Śr", "Cz", "Pt", "So", "Nd"]
                         delegate: Button { id: weekday; property int bit: 1 << index
-                            width: 67; height: 49; text: modelData
+                            width: Math.max(33, Math.min(59, (root.width - 62) / 7)); height: 46; text: modelData
                             background: Rectangle { radius: 10; color: (root.mask & weekday.bit) ? Theme.accent : Theme.surfaceMuted; border.color: Theme.border }
                             contentItem: Text { text: weekday.text; color: (root.mask & weekday.bit) ? Theme.accentText : Theme.text;
                                 font.pixelSize: Math.max(11, Math.round(14 * backend.fontScale / 100)); horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }

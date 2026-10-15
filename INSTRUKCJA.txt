@@ -1,0 +1,26 @@
+# Domowy Plan — poprawka pakowania Windows x86
+
+**Zawartość:** poprawiony `scripts/Build-Win32.ps1` oraz `BUDUJ_WIN32.bat`.
+To poprawka na błąd `windeployqt.exe: Unable to find the platform plugin.` w Qt 5.15.2 MinGW x86. Kod QML/C++ i baza SQLite pozostają bez zmian.
+
+## Instalacja poprawki
+
+1. Zamknij Qt Creator (opcjonalnie, ale zalecane) i zatrzymaj aplikację.
+2. Rozpakuj oba pliki w katalogu źródeł (np. `C:\Projects\DomowyPlan-v0.2`), zachowując katalog `scripts` i nadpisując istniejące pliki. Nazwa folderu projektu może pozostać v0.2, jeżeli nadpisywałeś go wcześniej nowszymi źródłami.
+3. W CMD w folderze projektu uruchom `BUDUJ_WIN32.bat`.
+4. Po udanym procesie (4/4) znajdziesz archiwum `out\DomowyPlan-Win32-x86-v0.4.0.zip`.
+5. Przenieś na tablet *cały* ZIP, rozpakuj i uruchom `DomowyPlan\ZAINSTALUJ.bat`.
+
+## Co zmieniono
+
+- `windeployqt` dostaje jawną ścieżkę `--qmake` Qt 5.15.2 x86.
+- Skrypt sprawdza dostępność i architekturę `plugins\platforms\qwindows.dll`.
+- Jeśli `windeployqt` zakończy się błędem, z tej samej instalacji Qt kopiuje biblioteki Qt 5 x86, pluginy i moduły QML oraz MinGW runtime.
+- Pozostają kontrole plików Windows x86 (PE), sterownika SQLite i struktury QML.
+- Alternatywne pakowanie będzie większe, ale nie wymaga żadnych dodatkowych narzędzi.
+
+## Ważne
+
+Uruchomienie i kompilację końcowej paczki należy sprawdzić **na Windows 10 x86**. Ten wariant poprawki został sprawdzony statycznie, ale nie był uruchomiony przy prawdziwej instalacji Qt Windows. Gdyby program nie wystartował, uruchom `DIAGNOSTYKA.bat` z pakietu i udostępnij wynik.
+
+Jeżeli plik `C:\Qt\5.15.2\mingw81_32\plugins\platforms\qwindows.dll` nie istnieje, fallback tego nie naprawi — najpierw trzeba poprawić instalację Qt.

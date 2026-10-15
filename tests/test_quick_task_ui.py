@@ -13,17 +13,18 @@ class QuickTaskUiTests(unittest.TestCase):
         for removed in ("Math.sin", "Math.cos", "wheel.orbit", "root.categoryIndex < 0"):
             self.assertNotIn(removed, self.qml)
 
-    def test_constant_side_by_side_lists(self):
+    def test_stable_category_and_task_lists(self):
         for required in (
             "id: categoryList", "id: templateList", "Layout.fillHeight: true",
             "model: root.categories", "model: root.templates", "clip: true",
         ):
             self.assertIn(required, self.qml)
         self.assertGreaterEqual(self.qml.count("ListView {"), 2)
+        self.assertIn("orientation: ListView.Horizontal", self.qml)
 
     def test_reopens_on_favorites_and_does_not_close_after_add(self):
         self.assertIn("categoryId = 0", self.qml)
-        self.assertIn('"★ Najczęstsze"', self.qml)
+        self.assertIn('"name": "Najcz\\u0119stsze"', self.qml)
         self.assertIn("backend.addFromQuickTemplate(id, targetDate, person)", self.qml)
         self.assertIn("++addedCount", self.qml)
         action = self.qml.split("function addPreset(id, title)", 1)[1].split("contentItem: ColumnLayout", 1)[0]
@@ -33,7 +34,7 @@ class QuickTaskUiTests(unittest.TestCase):
         self.assertIn("model: root.assigneeOptions", self.qml)
         self.assertIn("assigneeOptions = backend.assignees", self.qml)
         self.assertIn("selectedMemberId", self.qml)
-        self.assertIn("quickAssignee.currentIndex = idx", self.qml)
+        self.assertIn("quickAssignee.currentIndex = index", self.qml)
         self.assertIn('"Gotowe (" + root.addedCount', self.qml)
 
     def test_refresh_when_favorites_change(self):

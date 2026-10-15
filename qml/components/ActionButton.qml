@@ -7,11 +7,11 @@ Button {
     property bool primary: true
     property bool compact: false
     property bool danger: false
-    implicitHeight: compact ? 38 : 46
+    implicitHeight: compact ? 42 : 47
     implicitWidth: Math.max(compact ? 70 : 96, title.implicitWidth + (compact ? 22 : 32))
     padding: 8
     font.family: "Segoe UI"
-    font.pixelSize: compact ? 13 : 15
+    font.pixelSize: compact ? 12 : 14
     font.bold: primary
     background: Rectangle {
         radius: 11
