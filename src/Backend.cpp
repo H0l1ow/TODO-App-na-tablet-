@@ -17,6 +17,9 @@
 #include <QProcess>
 #include <QTime>
 #include <QDebug>
+#include <QSqlField>
+#include <QSet>
+#include <QTextStream>
 
 namespace {
 const QLocale polish(QLocale::Polish, QLocale::Poland);
@@ -27,15 +30,37 @@ struct BackupTable {
     QStringList columns;
 };
 
-QList<BackupTable> backupTables() {
-    // Explicit allowlist: imported JSON cannot inject a table or column name.
+QList<BackupTable> legacyBackupTables() {
     return {
-        {QStringLiteral("members"), {"id", "name", "created_at"}},
-        {QStringLiteral("tasks"), {"id", "title", "start_date", "recurrence", "weekdays", "member_id", "archived_at", "created_at"}},
-        {QStringLiteral("completions"), {"task_id", "day", "done", "completed_at"}},
-        {QStringLiteral("shopping"), {"id", "name", "quantity", "bought", "created_at", "bought_at"}},
-        {QStringLiteral("task_moves"), {"id", "task_id", "from_date", "to_date", "moved_at"}},
-        {QStringLiteral("settings"), {"key", "value"}}
+        {"members", {"id", "name", "created_at"}},
+        {"tasks", {"id", "title", "start_date", "recurrence", "weekdays", "member_id", "archived_at", "created_at"}},
+        {"completions", {"task_id", "day", "done", "completed_at"}},
+        {"shopping", {"id", "name", "quantity", "bought", "created_at", "bought_at"}},
+        {"task_moves", {"id", "task_id", "from_date", "to_date", "moved_at"}},
+        {"settings", {"key", "value"}}
+    };
+}
+QList<BackupTable> backupTables() {
+    return {
+        {"members", {"id", "name", "created_at"}},
+        {"categories", {"id", "name", "symbol", "position"}},
+        {"tasks", {"id", "title", "start_date", "recurrence", "weekdays", "member_id", "archived_at", "created_at", "interval_days", "end_date", "note", "category_id", "due_time", "schedule_kind"}},
+        {"quick_tasks", {"id", "category_id", "title", "member_id", "favorite", "uses", "last_used", "position"}},
+        {"completions", {"task_id", "day", "done", "completed_at", "done_by"}},
+        {"shopping", {"id", "name", "quantity", "bought", "created_at", "bought_at", "category"}},
+        {"shopping_catalog", {"id", "name", "category", "quantity", "favorite", "uses", "last_used"}},
+        {"task_moves", {"id", "task_id", "from_date", "to_date", "moved_at"}},
+        {"task_skips", {"task_id", "day", "skipped_at"}},
+        {"plan_snapshots", {"task_id", "day", "title", "member_name", "member_id", "captured_at"}},
+        {"shopping_history", {"id", "name", "quantity", "category", "bought_at"}},
+        {"subtasks", {"id", "task_id", "title", "position"}},
+        {"subtask_checks", {"subtask_id", "day", "done"}},
+        {"day_templates", {"id", "name", "created_at"}},
+        {"day_template_items", {"id", "template_id", "title", "member_id", "position"}},
+        {"shopping_sets", {"id", "name", "created_at"}},
+        {"shopping_set_items", {"id", "set_id", "name", "quantity", "category"}},
+        {"notes", {"id", "text", "created_at"}},
+        {"settings", {"key", "value"}}
     };
 }
 
@@ -54,6 +79,8 @@ Backend::Backend(const QString &dataDirectory, QObject *parent)
     m_dbPath = QDir(dir).filePath(QStringLiteral("domowy_plan.sqlite"));
     if (!openDatabase() || !initializeSchema()) return;
     m_ready = true;
+    seedDefaults();
+    snapshotToday();
     m_lastDark = darkMode();
 
     m_clock.setInterval(30000);
@@ -61,6 +88,7 @@ Backend::Backend(const QString &dataDirectory, QObject *parent)
         const QDate now = QDate::currentDate();
         if (now != m_lastDate) {
             m_lastDate = now;
+            snapshotToday();
             emit dataChanged();
         }
         const bool nowDark = darkMode();
@@ -91,6 +119,7 @@ void Backend::changed() {
         m_error.clear();
         emit errorChanged();
     }
+    if (m_ready) snapshotToday();
     emit dataChanged();
 }
 
@@ -126,6 +155,29 @@ bool Backend::initializeSchema() {
         if (!statement.trimmed().isEmpty() && !runSql(statement.trimmed())) return false;
     }
 
+    // SQLite cannot ADD COLUMN IF NOT EXISTS. Detect every v0.4 column
+    // instead of recreating tables (existing rows and IDs must survive).
+    const struct { const char *table; const char *name; const char *definition; } additions[] = {
+        {"tasks", "interval_days", "INTEGER NOT NULL DEFAULT 1"},
+        {"tasks", "end_date", "TEXT"},
+        {"tasks", "note", "TEXT NOT NULL DEFAULT ''"},
+        {"tasks", "category_id", "INTEGER"},
+        {"tasks", "due_time", "TEXT NOT NULL DEFAULT ''"},
+        {"tasks", "schedule_kind", "TEXT NOT NULL DEFAULT ''"},
+        {"completions", "done_by", "INTEGER"},
+        {"shopping", "category", "TEXT NOT NULL DEFAULT 'Inne'"},
+        {"plan_snapshots", "member_id", "INTEGER"}
+    };
+    for (const auto &addition : additions) {
+        if (!ensureColumn(QLatin1String(addition.table), QLatin1String(addition.name), QLatin1String(addition.definition))) return false;
+    }
+    if (!runSql(QStringLiteral("PRAGMA user_version=4"))) return false;
+    QSqlQuery active(m_db);
+    if (active.exec(QStringLiteral("SELECT value FROM settings WHERE key='active_member'")) && active.next())
+        m_activeMemberId = active.value(0).toInt();
+    QSqlQuery scale(m_db);
+    if (scale.exec(QStringLiteral("SELECT value FROM settings WHERE key='font_scale'")) && scale.next())
+        m_fontScale = qBound(85, scale.value(0).toInt(), 135);
     QSqlQuery settings(m_db);
     if (settings.exec(QStringLiteral("SELECT value FROM settings WHERE key='theme'")) && settings.next()) {
         const QString value = settings.value(0).toString();
@@ -155,11 +207,16 @@ int Backend::weekdayBit(const QString &date) const {
 }
 
 bool Backend::scheduleMatches(const QString &recurrence, const QDate &start,
-                              int weekdayMask, const QDate &on) {
-    if (!start.isValid() || !on.isValid() || on < start) return false;
+                              int weekdayMask, const QDate &on,
+                              int intervalDays, const QDate &endDate) {
+    if (!start.isValid() || !on.isValid() || on < start || (endDate.isValid() && on > endDate)) return false;
     if (recurrence == QLatin1String("once")) return on == start;
     if (recurrence == QLatin1String("daily")) return true;
     if (recurrence == QLatin1String("weekly")) return (weekdayMask & (1 << (on.dayOfWeek() - 1))) != 0;
+    if (recurrence == QLatin1String("interval"))
+        return intervalDays > 0 && (start.daysTo(on) % intervalDays) == 0;
+    if (recurrence == QLatin1String("monthly"))
+        return on.day() == qMin(start.day(), on.daysInMonth());
     return false;
 }
 
@@ -168,34 +225,35 @@ QVariantList Backend::tasksOn(const QDate &date) const {
     if (!m_ready || !date.isValid()) return rows;
     QSqlQuery q(m_db);
     q.prepare(QStringLiteral(
-        "SELECT t.id, t.title, t.start_date, t.recurrence, t.weekdays, "
-        "COALESCE(t.member_id,-1), COALESCE(m.name,''), "
-        "COALESCE(c.done,0), COALESCE(c.completed_at,'') "
-        "FROM tasks t "
-        "LEFT JOIN members m ON m.id=t.member_id "
+        "SELECT t.id,t.title,t.start_date,CASE WHEN t.schedule_kind<>'' THEN t.schedule_kind ELSE t.recurrence END,t.weekdays,"
+        "COALESCE(t.member_id,-1),COALESCE(m.name,''),COALESCE(c.done,0),"
+        "COALESCE(c.completed_at,''),t.interval_days,COALESCE(t.end_date,''),"
+        "COALESCE(t.note,''),COALESCE(t.category_id,-1),COALESCE(t.due_time,''),"
+        "CASE WHEN s.task_id IS NULL THEN 0 ELSE 1 END,COALESCE(c.done_by,-1),"
+        "COALESCE(who.name,''),COALESCE(cat.name,'') "
+        "FROM tasks t LEFT JOIN members m ON m.id=t.member_id "
         "LEFT JOIN completions c ON c.task_id=t.id AND c.day=? "
+        "LEFT JOIN task_skips s ON s.task_id=t.id AND s.day=? "
+        "LEFT JOIN members who ON who.id=c.done_by "
+        "LEFT JOIN categories cat ON cat.id=t.category_id "
         "WHERE t.start_date<=? AND (t.archived_at IS NULL OR t.archived_at>?) "
-        "AND ((t.recurrence='once' AND t.start_date=?) OR t.recurrence='daily' "
-        "OR (t.recurrence='weekly' AND (t.weekdays & ?) != 0)) "
-        "ORDER BY COALESCE(c.done,0) ASC, t.id DESC"));
+        "ORDER BY COALESCE(c.done,0) ASC,t.id DESC"));
     const QString day = date.toString(isoDateFormat);
-    q.addBindValue(day);
-    q.addBindValue(day);
-    q.addBindValue(day);
-    q.addBindValue(day);
-    q.addBindValue(1 << (date.dayOfWeek() - 1));
+    for (int i = 0; i < 4; ++i) q.addBindValue(day);
     if (!q.exec()) { reportError(q.lastError().text()); return rows; }
     while (q.next()) {
+        if (!scheduleMatches(q.value(3).toString(), parsedDate(q.value(2).toString()),
+                             q.value(4).toInt(), date, q.value(9).toInt(), parsedDate(q.value(10).toString()))) continue;
         QVariantMap task;
-        task.insert("id", q.value(0));
-        task.insert("title", q.value(1));
-        task.insert("startDate", q.value(2));
-        task.insert("recurrence", q.value(3));
-        task.insert("weekdays", q.value(4));
-        task.insert("memberId", q.value(5));
-        task.insert("memberName", q.value(6));
-        task.insert("done", q.value(7).toInt() == 1);
-        task.insert("completedAt", q.value(8));
+        task.insert("id", q.value(0)); task.insert("title", q.value(1));
+        task.insert("startDate", q.value(2)); task.insert("recurrence", q.value(3));
+        task.insert("weekdays", q.value(4)); task.insert("memberId", q.value(5));
+        task.insert("memberName", q.value(6)); task.insert("done", q.value(7).toInt() == 1);
+        task.insert("completedAt", q.value(8)); task.insert("intervalDays", q.value(9));
+        task.insert("endDate", q.value(10)); task.insert("note", q.value(11));
+        task.insert("categoryId", q.value(12)); task.insert("dueTime", q.value(13));
+        task.insert("skipped", q.value(14).toInt() == 1); task.insert("doneBy", q.value(15));
+        task.insert("doneByName", q.value(16)); task.insert("categoryName", q.value(17));
         task.insert("date", day);
         rows.append(task);
     }
@@ -210,7 +268,8 @@ int Backend::overdueCount(const QDate &date) const {
         "SELECT COUNT(*) FROM tasks t WHERE t.recurrence='once' AND t.start_date<? "
         "AND (t.archived_at IS NULL OR t.archived_at>?) "
         "AND NOT EXISTS (SELECT 1 FROM completions c "
-        "WHERE c.task_id=t.id AND c.day=t.start_date AND c.done=1)"));
+        "WHERE c.task_id=t.id AND c.day=t.start_date AND c.done=1) "
+        "AND NOT EXISTS (SELECT 1 FROM task_skips s WHERE s.task_id=t.id AND s.day=t.start_date)"));
     const QString day = date.toString(isoDateFormat);
     q.addBindValue(day);
     q.addBindValue(day);
@@ -232,12 +291,12 @@ QVariantMap Backend::dashboard() const {
 
 QVariantList Backend::shoppingItems() const {
     QVariantList rows;
-    QSqlQuery q(QStringLiteral("SELECT id,name,quantity,bought FROM shopping "
+    QSqlQuery q(QStringLiteral("SELECT id,name,quantity,bought,category FROM shopping "
                                "ORDER BY bought ASC, id DESC"), m_db);
     if (!q.isActive()) { reportError(q.lastError().text()); return rows; }
     while (q.next()) rows.append(QVariantMap{
         {"id", q.value(0)}, {"name", q.value(1)}, {"quantity", q.value(2)},
-        {"bought", q.value(3).toInt() == 1}
+        {"bought", q.value(3).toInt() == 1}, {"category", q.value(4)}
     });
     return rows;
 }
@@ -292,43 +351,33 @@ QVariantList Backend::weekDays() const {
     return days;
 }
 
-QVariantList Backend::historyDays() const {
-    QVariantList days;
-    for (int i = 13; i >= 0; --i) {
-        const QDate day = QDate::currentDate().addDays(-i);
-        const QVariantList scheduled = tasksOn(day);
-        int done = 0;
-        for (const QVariant &v : scheduled) if (v.toMap().value("done").toBool()) ++done;
-        days.append(QVariantMap{{"date", day.toString(isoDateFormat)},
-                                {"label", polish.toString(day, "ddd d.MM")},
-                                {"planned", scheduled.size()}, {"done", done},
-                                {"percent", scheduled.size() ? 100 * done / scheduled.size() : 0}});
-    }
-    return days;
-}
+QVariantList Backend::historyDays() const { return historyForRange(14); }
 
 QVariantMap Backend::historyStats() const {
-    int done7 = 0, planned7 = 0, done30 = 0;
-    for (int i = 0; i < 30; ++i) {
-        const QVariantList tasks = tasksOn(QDate::currentDate().addDays(-i));
-        for (const QVariant &v : tasks) {
-            if (v.toMap().value("done").toBool()) {
-                ++done30;
-                if (i < 7) ++done7;
-            }
+    int done7 = 0, done30 = 0, planned7 = 0, skipped7 = 0, skipped30 = 0;
+    for (const QVariant &v : historyForRange(30)) {
+        const QVariantMap day = v.toMap();
+        const QDate d = parsedDate(day.value("date").toString());
+        done30 += day.value("done").toInt();
+        skipped30 += day.value("skipped").toInt();
+        if (d >= QDate::currentDate().addDays(-6)) {
+            done7 += day.value("done").toInt();
+            skipped7 += day.value("skipped").toInt();
+            planned7 += day.value("planned").toInt();
         }
-        if (i < 7) planned7 += tasks.size();
     }
     return {{"done7", done7}, {"done30", done30}, {"planned7", planned7},
-            {"percent7", planned7 ? (100 * done7 / planned7) : 0}};
+        {"skipped7", skipped7}, {"skipped30", skipped30},
+        {"percent7", planned7 ? 100*done7/planned7 : -1}};
 }
 
 QVariantList Backend::recentActivity() const {
     QVariantList result;
     QSqlQuery q(QStringLiteral(
-        "SELECT t.title, c.day, c.completed_at, COALESCE(m.name,'') "
+        "SELECT t.title, c.day, c.completed_at, COALESCE(who.name,m.name,'') "
         "FROM completions c JOIN tasks t ON t.id=c.task_id "
         "LEFT JOIN members m ON m.id=t.member_id "
+        "LEFT JOIN members who ON who.id=c.done_by "
         "WHERE c.done=1 ORDER BY c.completed_at DESC LIMIT 20"), m_db);
     if (!q.isActive()) { reportError(q.lastError().text()); return result; }
     while (q.next()) result.append(QVariantMap{
@@ -340,54 +389,59 @@ QVariantList Backend::recentActivity() const {
 
 bool Backend::addTask(const QString &title, const QString &startDate,
                       const QString &recurrence, int weekdayMask, int memberId) {
-    const QString name = normalized(title);
-    if (name.isEmpty() || name.size() > 160) {
-        reportError(QStringLiteral("Nazwa zadania musi mieć 1–160 znaków.")); return false;
-    }
-    if (!parsedDate(startDate).isValid()) {
-        reportError(QStringLiteral("Niepoprawna data zadania.")); return false;
-    }
-    if (recurrence != "once" && recurrence != "daily" && recurrence != "weekly") {
-        reportError(QStringLiteral("Nieznany typ powtarzania.")); return false;
-    }
-    if (recurrence == "weekly" && (weekdayMask < 1 || weekdayMask > 127)) {
-        reportError(QStringLiteral("Wybierz co najmniej jeden dzień tygodnia.")); return false;
-    }
-    QSqlQuery q(m_db);
-    q.prepare(QStringLiteral("INSERT INTO tasks (title,start_date,recurrence,weekdays,member_id,created_at) "
-                             "VALUES (?,?,?,?,?,?)"));
-    q.addBindValue(name);
-    q.addBindValue(startDate);
-    q.addBindValue(recurrence);
-    q.addBindValue(recurrence == "weekly" ? weekdayMask : 0);
-    q.addBindValue(memberId > 0 ? QVariant(memberId) : QVariant(QVariant::Int));
-    q.addBindValue(isoNow());
-    if (!q.exec()) { reportError(q.lastError().text()); return false; }
-    changed();
-    return true;
+    return createTask(title, startDate, recurrence, weekdayMask, memberId, 1, QString(), QString(), -1);
 }
 
-bool Backend::setTaskDone(int taskId, const QString &date, bool done) {
+bool Backend::setTaskDone(int taskId, const QString &date, bool done, int doneBy) {
     const QDate day = parsedDate(date);
     if (!day.isValid()) { reportError(QStringLiteral("Niepoprawna data.")); return false; }
     QSqlQuery task(m_db);
-    task.prepare(QStringLiteral("SELECT start_date,recurrence,weekdays,archived_at FROM tasks WHERE id=?"));
+    task.prepare(QStringLiteral("SELECT start_date,CASE WHEN schedule_kind<>'' THEN schedule_kind ELSE recurrence END,weekdays,archived_at FROM tasks WHERE id=?"));
     task.addBindValue(taskId);
     if (!task.exec() || !task.next()) { reportError(QStringLiteral("Nie znaleziono zadania.")); return false; }
     const QDate start = parsedDate(task.value(0).toString());
+    QSqlQuery previous(m_db);
+    previous.prepare(QStringLiteral("SELECT done,completed_at,done_by FROM completions WHERE task_id=? AND day=?"));
+    previous.addBindValue(taskId); previous.addBindValue(date);
+    if (!previous.exec()) { reportError(previous.lastError().text()); return false; }
+    const bool existed = previous.next();
+    const QVariant priorDone = existed ? previous.value(0) : QVariant();
+    const QVariant priorTime = existed ? previous.value(1) : QVariant();
+    const QVariant priorBy = existed ? previous.value(2) : QVariant();
+    QSqlQuery priorSkip(m_db);
+    priorSkip.prepare(QStringLiteral("SELECT 1 FROM task_skips WHERE task_id=? AND day=?"));
+    priorSkip.addBindValue(taskId); priorSkip.addBindValue(date);
+    const bool wasSkipped = priorSkip.exec() && priorSkip.next();
+    if (doneBy <= 0) doneBy = m_activeMemberId;
     const QDate archive = parsedDate(task.value(3).toString());
-    if (!scheduleMatches(task.value(1).toString(), start, task.value(2).toInt(), day)
+    QSqlQuery interval(m_db);
+    interval.prepare(QStringLiteral("SELECT interval_days,end_date FROM tasks WHERE id=?"));
+    interval.addBindValue(taskId);
+    if (!interval.exec() || !interval.next()) return false;
+    if (!scheduleMatches(task.value(1).toString(), start, task.value(2).toInt(), day,
+                          interval.value(0).toInt(), parsedDate(interval.value(1).toString()))
         || (archive.isValid() && day >= archive)) {
         reportError(QStringLiteral("Zadanie nie występuje w tym dniu.")); return false;
     }
     QSqlQuery q(m_db);
-    q.prepare(QStringLiteral("INSERT OR REPLACE INTO completions (task_id,day,done,completed_at) "
-                             "VALUES (?,?,?,?)"));
+    q.prepare(QStringLiteral("INSERT OR REPLACE INTO completions (task_id,day,done,completed_at,done_by) "
+                             "VALUES (?,?,?,?,?)"));
     q.addBindValue(taskId);
     q.addBindValue(date);
     q.addBindValue(done ? 1 : 0);
     q.addBindValue(done ? QVariant(isoNow()) : QVariant(QVariant::String));
+    q.addBindValue(done && doneBy > 0 ? QVariant(doneBy) : QVariant(QVariant::Int));
     if (!q.exec()) { reportError(q.lastError().text()); return false; }
+    if (done) {
+        QSqlQuery removeSkip(m_db);
+        removeSkip.prepare(QStringLiteral("DELETE FROM task_skips WHERE task_id=? AND day=?"));
+        removeSkip.addBindValue(taskId); removeSkip.addBindValue(date);
+        if (!removeSkip.exec()) { reportError(removeSkip.lastError().text()); return false; }
+    }
+    setUndo("completion", {{"taskId", taskId}, {"date", date}, {"existed", existed},
+                           {"done", priorDone}, {"completedAt", priorTime}, {"doneBy", priorBy},
+                           {"priorSkipped", wasSkipped}},
+            QStringLiteral("Cofnij zmianę wykonania"));
     changed();
     return true;
 }
@@ -423,35 +477,27 @@ bool Backend::setTaskAssignee(int taskId, int memberId) {
 // Daily and weekly tasks already scheduled tomorrow count as present.
 Backend::CopyResult Backend::copyOccurrence(const QVariantMap &sourceTask, const QDate &targetDate) {
     const QString target = targetDate.toString(isoDateFormat);
-    QSqlQuery exists(m_db);
-    exists.prepare(QStringLiteral(
-        "SELECT 1 FROM tasks t WHERE t.title = ? COLLATE NOCASE "
-        "AND COALESCE(t.member_id,-1)=? AND t.start_date<=? "
-        "AND (t.archived_at IS NULL OR t.archived_at>?) "
-        "AND ((t.recurrence='once' AND t.start_date=?) OR t.recurrence='daily' "
-        "OR (t.recurrence='weekly' AND (t.weekdays & ?) != 0)) LIMIT 1"));
-    exists.addBindValue(sourceTask.value("title"));
-    exists.addBindValue(sourceTask.value("memberId"));
-    exists.addBindValue(target);
-    exists.addBindValue(target);
-    exists.addBindValue(target);
-    exists.addBindValue(1 << (targetDate.dayOfWeek() - 1));
-    if (!exists.exec()) {
-        reportError(exists.lastError().text());
-        return CopyResult::Error;
+    const QVariantList tomorrow = tasksOn(targetDate);
+    for (const QVariant &row : tomorrow) {
+        const QVariantMap item = row.toMap();
+        if (item.value("title").toString().compare(sourceTask.value("title").toString(), Qt::CaseInsensitive) == 0
+                && item.value("memberId").toInt() == sourceTask.value("memberId").toInt())
+            return CopyResult::AlreadyPresent;
     }
-    if (exists.next()) return CopyResult::AlreadyPresent;
-    exists.finish();
 
     QSqlQuery insert(m_db);
     insert.prepare(QStringLiteral(
-        "INSERT INTO tasks (title,start_date,recurrence,weekdays,member_id,created_at) "
-        "VALUES (?,?,'once',0,?,?)"));
+        "INSERT INTO tasks (title,start_date,recurrence,weekdays,member_id,created_at,note,category_id,due_time) "
+        "VALUES (?,?,'once',0,?,?,?,?,?)"));
     insert.addBindValue(sourceTask.value("title"));
     insert.addBindValue(target);
     const int memberId = sourceTask.value("memberId").toInt();
     insert.addBindValue(memberId > 0 ? QVariant(memberId) : QVariant(QVariant::Int));
     insert.addBindValue(isoNow());
+    insert.addBindValue(sourceTask.value("note").toString());
+    const int categoryId = sourceTask.value("categoryId", -1).toInt();
+    insert.addBindValue(categoryId > 0 ? QVariant(categoryId) : QVariant(QVariant::Int));
+    insert.addBindValue(sourceTask.value("dueTime").toString());
     if (!insert.exec()) {
         reportError(insert.lastError().text());
         return CopyResult::Error;
@@ -531,6 +577,7 @@ bool Backend::archiveTask(int taskId) {
     q.addBindValue(today());
     q.addBindValue(taskId);
     if (!q.exec()) { reportError(q.lastError().text()); return false; }
+    setUndo("archive", {{"id", taskId}}, QStringLiteral("Cofnij archiwizację"));
     changed();
     return true;
 }
@@ -543,7 +590,8 @@ bool Backend::moveOverdueToToday() {
         "SELECT t.id,t.start_date FROM tasks t WHERE t.recurrence='once' "
         "AND t.start_date<? AND (t.archived_at IS NULL OR t.archived_at>?) "
         "AND NOT EXISTS (SELECT 1 FROM completions c WHERE c.task_id=t.id "
-        "AND c.day=t.start_date AND c.done=1)"));
+        "AND c.day=t.start_date AND c.done=1) "
+        "AND NOT EXISTS (SELECT 1 FROM task_skips s WHERE s.task_id=t.id AND s.day=t.start_date)"));
     ids.addBindValue(now);
     ids.addBindValue(now);
     if (!ids.exec()) { m_db.rollback(); reportError(ids.lastError().text()); return false; }
@@ -570,45 +618,79 @@ bool Backend::moveOverdueToToday() {
     return true;
 }
 
-bool Backend::addShoppingItem(const QString &name, const QString &quantity) {
+bool Backend::addShoppingItem(const QString &name, const QString &quantity, const QString &category) {
     const QString product = normalized(name);
     if (product.isEmpty() || product.size() > 120 || quantity.size() > 40) {
         reportError(QStringLiteral("Sprawdź nazwę lub ilość produktu.")); return false;
     }
     QSqlQuery q(m_db);
-    q.prepare(QStringLiteral("INSERT INTO shopping (name,quantity,created_at) VALUES (?,?,?)"));
+    q.prepare(QStringLiteral("INSERT INTO shopping (name,quantity,created_at,category) VALUES (?,?,?,?)"));
     q.addBindValue(product);
     q.addBindValue(quantity.trimmed());
     q.addBindValue(isoNow());
+    q.addBindValue(category.trimmed().isEmpty() ? QStringLiteral("Inne") : category.trimmed().left(50));
     if (!q.exec()) { reportError(q.lastError().text()); return false; }
+    setUndo("add_shopping", {{"id", q.lastInsertId()}}, QStringLiteral("Cofnij dodanie produktu"));
     changed();
     return true;
 }
 
 bool Backend::setShoppingDone(int itemId, bool done) {
+    QSqlQuery before(m_db);
+    before.prepare(QStringLiteral("SELECT name,quantity,category,bought,bought_at FROM shopping WHERE id=?"));
+    before.addBindValue(itemId);
+    if (!before.exec() || !before.next()) { reportError(QStringLiteral("Nie znaleziono produktu.")); return false; }
+    const bool wasBought = before.value(3).toInt() == 1;
+    const QVariant oldTime = before.value(4);
+    if (!m_db.transaction()) return false;
+    QVariant historyId;
     QSqlQuery q(m_db);
-    q.prepare(QStringLiteral("UPDATE shopping SET bought=?, bought_at=? WHERE id=?"));
+    q.prepare(QStringLiteral("UPDATE shopping SET bought=?,bought_at=? WHERE id=?"));
+    const QString now = isoNow();
     q.addBindValue(done ? 1 : 0);
-    q.addBindValue(done ? QVariant(isoNow()) : QVariant(QVariant::String));
+    q.addBindValue(done ? QVariant(now) : QVariant(QVariant::String));
     q.addBindValue(itemId);
-    if (!q.exec()) { reportError(q.lastError().text()); return false; }
+    if (!q.exec()) { m_db.rollback(); reportError(q.lastError().text()); return false; }
+    if (done && !wasBought) {
+        QSqlQuery history(m_db);
+        history.prepare(QStringLiteral("INSERT INTO shopping_history(name,quantity,category,bought_at) VALUES(?,?,?,?)"));
+        history.addBindValue(before.value(0)); history.addBindValue(before.value(1));
+        history.addBindValue(before.value(2)); history.addBindValue(now);
+        if (!history.exec()) { m_db.rollback(); reportError(history.lastError().text()); return false; }
+        historyId = history.lastInsertId();
+    }
+    if (!m_db.commit()) return false;
+    setUndo("shopping_status", {{"id", itemId}, {"bought", wasBought}, {"boughtAt", oldTime}, {"historyId", historyId}},
+            QStringLiteral("Cofnij zmianę zakupów"));
     changed();
     return true;
 }
 
 bool Backend::removeShoppingItem(int itemId) {
+    QSqlQuery old(m_db);
+    old.prepare(QStringLiteral("SELECT id,name,quantity,bought,created_at,bought_at,category FROM shopping WHERE id=?"));
+    old.addBindValue(itemId);
+    if (!old.exec() || !old.next()) return false;
+    const QVariantMap undo = {{"id", old.value(0)}, {"name", old.value(1)}, {"quantity", old.value(2)},
+        {"bought", old.value(3)}, {"createdAt", old.value(4)}, {"boughtAt", old.value(5)},
+        {"category", old.value(6)}};
     QSqlQuery q(m_db);
     q.prepare(QStringLiteral("DELETE FROM shopping WHERE id=?"));
     q.addBindValue(itemId);
     if (!q.exec()) { reportError(q.lastError().text()); return false; }
-    changed();
-    return true;
+    setUndo("delete_shopping", undo, QStringLiteral("Przywróć usunięty produkt"));
+    changed(); return true;
 }
 
 bool Backend::clearPurchased() {
+    QVariantList removed;
+    QSqlQuery old(QStringLiteral("SELECT id,name,quantity,bought,created_at,bought_at,category FROM shopping WHERE bought=1"), m_db);
+    while (old.next()) removed.append(QVariantMap{{"id",old.value(0)},{"name",old.value(1)},
+        {"quantity",old.value(2)},{"bought",old.value(3)},{"createdAt",old.value(4)},
+        {"boughtAt",old.value(5)},{"category",old.value(6)}});
     if (!runSql(QStringLiteral("DELETE FROM shopping WHERE bought=1"))) return false;
-    changed();
-    return true;
+    if (!removed.isEmpty()) setUndo("clear_purchased", {{"rows", removed}}, QStringLiteral("Cofnij czyszczenie zakupów"));
+    changed(); return true;
 }
 
 bool Backend::addMember(const QString &name) {
@@ -630,6 +712,11 @@ bool Backend::removeMember(int memberId) {
     q.prepare(QStringLiteral("DELETE FROM members WHERE id=?"));
     q.addBindValue(memberId);
     if (!q.exec()) { reportError(q.lastError().text()); return false; }
+    if (memberId == m_activeMemberId) {
+        m_activeMemberId = -1;
+        QSqlQuery setting(m_db);
+        setting.exec(QStringLiteral("INSERT OR REPLACE INTO settings(key,value) VALUES('active_member','-1')"));
+    }
     changed();
     return true;
 }
@@ -667,7 +754,7 @@ QString Backend::backupNow() {
     }
     QJsonObject root;
     root.insert("format", "domowy-plan-backup");
-    root.insert("version", 1);
+    root.insert("version", 2);
     root.insert("exportedAt", isoNow());
     for (const BackupTable &table : backupTables()) {
         QSqlQuery query(m_db);
@@ -700,11 +787,18 @@ QString Backend::backupNow() {
 }
 
 bool Backend::restoreLatestBackup() {
-    QDir backupDir(backupDirectory());
-    const QFileInfoList files = backupDir.entryInfoList(
-        QStringList() << "domowy-plan-*.json", QDir::Files, QDir::Time);
-    if (files.isEmpty()) { reportError(QStringLiteral("Brak kopii zapasowej w folderze Dokumenty/DomowyPlan.")); return false; }
-    QFile file(files.first().absoluteFilePath());
+    const QVariantList choices = availableBackups();
+    if (choices.isEmpty()) {
+        reportError(QStringLiteral("Brak kopii w folderze Dokumenty/DomowyPlan.")); return false;
+    }
+    return restoreBackup(choices.first().toMap().value("path").toString());
+}
+
+bool Backend::restoreBackup(const QString &path) {
+    if (!QFileInfo(path).isFile() || !path.endsWith(QStringLiteral(".json"), Qt::CaseInsensitive)) {
+        reportError(QStringLiteral("Nie znaleziono wybranej kopii JSON.")); return false;
+    }
+    QFile file(path);
     if (!file.open(QIODevice::ReadOnly) || file.size() > 20 * 1024 * 1024) {
         reportError(QStringLiteral("Nie można odczytać kopii lub jest zbyt duża.")); return false;
     }
@@ -714,17 +808,22 @@ bool Backend::restoreLatestBackup() {
         reportError(QStringLiteral("Uszkodzony plik kopii zapasowej.")); return false;
     }
     const QJsonObject root = document.object();
-    if (root.value("format").toString() != "domowy-plan-backup" || root.value("version").toInt() != 1) {
+    const int backupVersion = root.value("version").toInt();
+    if (root.value("format").toString() != "domowy-plan-backup" || (backupVersion != 1 && backupVersion != 2)) {
         reportError(QStringLiteral("Nieobsługiwany format kopii zapasowej.")); return false;
     }
-    const QList<BackupTable> tables = backupTables();
+    const QList<BackupTable> tables = backupVersion == 1 ? legacyBackupTables() : backupTables();
     for (const BackupTable &table : tables) {
         if (!root.contains(table.name) || !root.value(table.name).isArray()) {
             reportError(QStringLiteral("Kopia nie zawiera tabeli: ") + table.name); return false;
         }
     }
     if (!m_db.transaction()) { reportError(m_db.lastError().text()); return false; }
-    const QStringList deletionOrder = {"task_moves", "completions", "shopping", "tasks", "members", "settings"};
+    const QStringList deletionOrder = {
+        "subtask_checks", "subtasks", "plan_snapshots", "task_skips", "task_moves", "completions",
+        "day_template_items", "day_templates", "shopping_set_items", "shopping_sets", "shopping_history",
+        "quick_tasks", "shopping_catalog", "shopping", "notes", "tasks", "categories", "members", "settings"
+    };
     for (const QString &table : deletionOrder) {
         QSqlQuery deletion(m_db);
         if (!deletion.exec(QStringLiteral("DELETE FROM ") + table)) {
@@ -763,6 +862,7 @@ bool Backend::restoreLatestBackup() {
         const QString candidate = theme.value(0).toString();
         if (candidate == "light" || candidate == "dark" || candidate == "auto") m_themeMode = candidate;
     }
+    if (backupVersion == 1) seedDefaults();
     m_lastDark = darkMode();
     emit appearanceChanged();
     changed();

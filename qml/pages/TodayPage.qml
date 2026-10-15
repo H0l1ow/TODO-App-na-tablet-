@@ -5,208 +5,222 @@ import "../components"
 
 Item {
     id: page
-    readonly property var counts: backend.dashboard
+    signal openShopping()
+    property int memberFilter: -2
+    property var tasks: backend.tasksForDateFiltered(backend.today, memberFilter)
+    property var counts: backend.dashboard
+    property var favorites: backend.quickTemplates(0)
+    property var overdue: backend.overdueTasks()
+    property var selectedOverdue: []
+    property var notesList: backend.notes()
+    Connections { target: backend
+        function onDataChanged() {
+            page.notesList = backend.notes()
+            page.favorites = backend.quickTemplates(0)
+            page.overdue = backend.overdueTasks()
+            var ids = page.overdue.map(function(t) { return t.id })
+            page.selectedOverdue = page.selectedOverdue.filter(function(id) { return ids.indexOf(id) !== -1 })
+        }
+    }
     property string statusMessage: ""
+
     Flickable {
         id: scroll
-        anchors.fill: parent
-        clip: true
-        contentWidth: width
-        contentHeight: content.height + 50
+        anchors.fill: parent; clip: true
+        contentWidth: width; contentHeight: content.implicitHeight + 56
         boundsBehavior: Flickable.StopAtBounds
         ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
-        Column {
-            id: content
-            x: 26; y: 24
-            width: scroll.width - 52
-            spacing: 22
+        ColumnLayout {
+            id: content; x: 24; y: 18; width: scroll.width-48; spacing: 16
             RowLayout {
-                width: parent.width
-                height: 76
-                ColumnLayout {
-                    spacing: 4; Layout.fillWidth: true
-                    Text { text: "DOBRY DZIEŃ — TO TWÓJ PLAN"; color: Theme.accent; font.bold: true; font.pixelSize: 11; font.letterSpacing: 1.6 }
-                    Text { text: "Dzień dobry!"; font.pixelSize: 32; font.bold: true; color: Theme.text }
-                    Text { text: backend.todayLabel; color: Theme.muted; font.pixelSize: 14 }
+                Layout.fillWidth: true; spacing: 10
+                ColumnLayout { Layout.fillWidth: true; spacing: 2
+                    Text { text: "Dzisiaj"; font.pixelSize: Math.max(11, Math.round(30 * backend.fontScale / 100)); font.bold: true; color: Theme.text }
+                    Text { text: backend.todayLabel; font.pixelSize: Math.max(11, Math.round(15 * backend.fontScale / 100)); color: Theme.muted }
                 }
-                ActionButton {
-                    text: "Szybkie zadanie"; onClicked: openQuickTask()
-                }
-                ActionButton {
-                    text: "+  Wpisz zadanie"; primary: false
-                    onClicked: { scroll.contentY = Math.max(0, tasksCard.y - 100); taskInput.forceActiveFocus() }
-                }
+                ActionButton { text: "+ Szybkie zadanie"; onClicked: openQuickTask() }
+                ActionButton { text: "+ Własne"; primary: false; onClicked: newTask() }
             }
-            Row {
-                width: parent.width; height: 126; spacing: 15
-                StatCard { width: (parent.width - 30)/3; caption: "Postęp dzisiaj"; amount: counts.done + " / " + counts.total; note: "Wykonanych zadań" }
-                StatCard { width: (parent.width - 30)/3; caption: "Pozostało do zrobienia"; amount: "" + counts.remaining; note: "Bez pośpiechu" }
-                StatCard { width: (parent.width - 30)/3; caption: "Zaległe zadania"; amount: "" + counts.overdue; note: "Jednorazowe z poprzednich dni" }
+            RowLayout {
+                Layout.fillWidth: true; spacing: 12
+                Text { text: counts.done + " / " + counts.total + " wykonanych"; color: Theme.text;
+                    font.pixelSize: Math.max(11, Math.round(17 * backend.fontScale / 100)); font.bold: true }
+                Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 12; radius: 6; color: Theme.surfaceMuted
+                    Rectangle { height: parent.height; radius: 6; color: Theme.accent;
+                        width: counts.total ? parent.width*counts.done/counts.total : 0 }
+                }
+                Text { text: counts.overdue + " zaległych"; font.pixelSize: Math.max(11, Math.round(13 * backend.fontScale / 100));
+                    color: counts.overdue ? Theme.warning : Theme.muted }
             }
-            Flow {
-                id: body
-                width: parent.width
-                spacing: 16
-                height: content.width >= 940 ? Math.max(tasksCard.height, aside.height) : (tasksCard.height + aside.height + 16)
-                Rectangle {
-                    id: tasksCard
-                    width: content.width >= 940 ? Math.floor((body.width - 16) * 0.63) : body.width
-                    height: taskContent.implicitHeight + 40
-                    radius: 19; color: Theme.surface; border.color: Theme.border
-                    Column {
-                        id: taskContent
-                        x: 20; y: 20; width: parent.width - 40; spacing: 12
-                        RowLayout {
-                            width: parent.width; height: 35
-                            Text { text: "Zadania na dziś"; color: Theme.text; font.pixelSize: 19; font.bold: true; Layout.fillWidth: true }
-                            ActionButton {
-                                text: "Kopiuj dzień →"; compact: true; primary: false
-                                enabled: counts.total > 0
-                                onClicked: { copyDayDialog.sourceDate = backend.today; copyDayDialog.open() }
-                            }
-                        }
-                        Text {
-                            width: parent.width
-                            visible: backend.todayTasks.length === 0
-                            text: "Na dziś nie ma zadań. Dodaj pierwsze poniżej lub zaplanuj je na tydzień."
-                            wrapMode: Text.WordWrap
-                            color: Theme.muted; font.pixelSize: 14
-                            topPadding: 20; bottomPadding: 24
-                        }
-                        Repeater {
-                            model: backend.todayTasks
-                            delegate: TaskRow {
-                                width: taskContent.width
-                                task: modelData
-                                showCopy: true
-                                onCheckRequested: backend.setTaskDone(taskId, backend.today, done)
-                                onAssigneeRequested: {
-                                    assignmentDialog.taskId = taskId
-                                    assignmentDialog.taskTitle = task.title
-                                    assignmentDialog.currentMemberId = task.memberId
-                                    assignmentDialog.open()
-                                }
-                                onCopyRequested: {
-                                    if (backend.copyTaskToNextDay(taskId, backend.today))
-                                        page.statusMessage = "Zadanie zostało skopiowane na jutro."
+            RowLayout { Layout.fillWidth: true; spacing: 8
+                ActionButton { text: "Kopiuj dzień"; primary: false; compact: true; onClicked: {
+                    copyDayDialog.sourceDate = backend.today; copyDayDialog.open()
+                } }
+                ActionButton { text: "Szablon dnia"; primary: false; compact: true; onClicked: {
+                    dayTemplatesDialog.targetDate = backend.today; dayTemplatesDialog.open()
+                } }
+                ActionButton { text: "Cofnij ↶"; primary: false; compact: true;
+                    enabled: backend.undoLabel.length > 0; onClicked: backend.undoLast() }
+                Item { Layout.fillWidth: true }
+            }
+            Rectangle { Layout.fillWidth: true; Layout.preferredHeight: favoritesRow.implicitHeight + 25;
+                radius: 14; color: Theme.accentSoft; border.color: Theme.border
+                ColumnLayout { id: favoritesRow; anchors.left: parent.left; anchors.right: parent.right;
+                    anchors.top: parent.top; anchors.margins: 12; spacing: 9
+                    Text { text: "★  SZYBKIE SKRÓTY"; color: Theme.accent; font.pixelSize: Math.max(11, Math.round(12 * backend.fontScale / 100)); font.bold: true }
+                    Flow { Layout.fillWidth: true; spacing: 8; Layout.preferredHeight: Math.max(57, childrenRect.height + 2)
+                        Repeater { model: Math.min(page.favorites.length, 5)
+                            delegate: ActionButton {
+                                text: "+ " + page.favorites[index].title; primary: false; compact: true;
+                                implicitHeight: 51
+                                onClicked: {
+                                    if (backend.addFromQuickTemplate(page.favorites[index].id, backend.today, -2))
+                                        page.statusMessage = "Dodano: " + page.favorites[index].title
                                 }
                             }
                         }
-                        RowLayout {
-                            width: parent.width
-                            spacing: 8
-                            FormInput {
-                                id: taskInput
-                                Layout.fillWidth: true
-                                placeholderText: "Wpisz własne zadanie..."
-                                maximumLength: 160
-                                onAccepted: addQuickTask()
-                            }
-                            ActionButton { text: "Dodaj"; compact: true; onClicked: addQuickTask() }
-                        }
-                        RowLayout {
-                            width: parent.width; spacing: 10
-                            Text { text: "Przypisz:"; color: Theme.muted; font.pixelSize: 14 }
-                            ComboBox {
-                                id: todayAssignee
-                                Layout.fillWidth: true
-                                Layout.preferredHeight: 42
-                                model: backend.assignees
+                    }
+                }
+            }
+            RowLayout { Layout.fillWidth: true; Layout.alignment: Qt.AlignTop; spacing: 14
+                Rectangle { Layout.fillWidth: true; Layout.preferredWidth: 660;
+                    Layout.preferredHeight: taskColumn.implicitHeight + 36;
+                    color: Theme.surface; border.color: Theme.border; radius: 16
+                    ColumnLayout { id: taskColumn; anchors.fill: parent; anchors.margins: 18; spacing: 11
+                        RowLayout { Layout.fillWidth: true
+                            Text { text: "Zadania na dziś"; color: Theme.text; font.pixelSize: Math.max(11, Math.round(21 * backend.fontScale / 100)); font.bold: true; Layout.fillWidth: true }
+                            ComboBox { id: filterBox; Layout.preferredWidth: Math.min(185, taskColumn.width*0.37);
+                                Layout.preferredHeight: 50;
+                                model: [{"id": -2, "name": "Wszystkie"}].concat(backend.assignees)
                                 textRole: "name"
-                                font.pixelSize: 14
+                                onCurrentIndexChanged: {
+                                    var options = [{"id": -2, "name": "Wszystkie"}].concat(backend.assignees)
+                                    page.memberFilter = currentIndex >= 0 && currentIndex < options.length ? options[currentIndex].id : -2
+                                }
                             }
-                            ActionButton { text: "Szybkie zadanie"; compact: true; primary: false; onClicked: openQuickTask() }
                         }
-                        Text {
-                            visible: page.statusMessage.length > 0
-                            width: parent.width
-                            text: page.statusMessage
-                            color: Theme.accent; font.pixelSize: 13
-                            wrapMode: Text.WordWrap
+                        Text { Layout.fillWidth: true; visible: page.tasks.length === 0;
+                            text: "Brak zadań w tym widoku. Dodaj zadanie, wybierając skrót lub wpisując tekst.";
+                            wrapMode: Text.WordWrap; font.pixelSize: Math.max(11, Math.round(15 * backend.fontScale / 100)); color: Theme.muted }
+                        ListView { id: taskList; Layout.fillWidth: true;
+                            Layout.preferredHeight: Math.min(620, Math.max(80, page.tasks.length * 80));
+                            clip: true; spacing: 2; model: page.tasks
+                            boundsBehavior: Flickable.StopAtBounds
+                            ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
+                            delegate: TaskRow {
+                                width: ListView.view ? ListView.view.width - 5 : 500
+                                task: modelData
+                                onCheckRequested: backend.setTaskDone(taskId, backend.today, done)
+                                onAssigneeRequested: editAssignee(task)
+                                onActionRequested: openActions(task)
+                            }
+                        }
+                        RowLayout { Layout.fillWidth: true; spacing: 8
+                            FormInput { id: quickInput; Layout.fillWidth: true; maximumLength: 160;
+                                placeholderText: "Niestandardowe zadanie..."; onAccepted: addCustom() }
+                            ActionButton { text: "+ Dodaj"; compact: true; onClicked: addCustom() }
+                        }
+                        RowLayout { Layout.fillWidth: true
+                            Text { text: "Przypisz nowe:"; color: Theme.muted; font.pixelSize: Math.max(11, Math.round(13 * backend.fontScale / 100)) }
+                            ComboBox { id: assigneeBox; Layout.fillWidth: true; Layout.preferredHeight: 48;
+                                model: backend.assignees; textRole: "name" }
                         }
                     }
                 }
-                Column {
-                    id: aside
-                    width: content.width >= 940 ? body.width - tasksCard.width - 16 : body.width
-                    spacing: 16
-                    height: overdueCard.height + shoppingCard.height + 16
-                    Rectangle {
-                        id: overdueCard
-                        width: parent.width
-                        height: counts.overdue > 0 ? 90 : 70
-                        radius: 16
-                        color: counts.overdue > 0 ? Theme.warningSoft : Theme.accentSoft
-                        ColumnLayout {
-                            anchors.fill: parent; anchors.margins: 15; spacing: 8
-                            Text {
-                                text: counts.overdue > 0 ? "⚠  " + counts.overdue + " zaległych zadań" : "✓  Wszystko aktualne"
-                                color: counts.overdue > 0 ? Theme.warning : Theme.accent
-                                font.pixelSize: 13; font.bold: true; Layout.fillWidth: true
-                            }
-                            ActionButton {
-                                text: "Przenieś na dziś"
-                                compact: true; primary: false
-                                visible: counts.overdue > 0
-                                onClicked: backend.moveOverdueToToday()
-                            }
+                Rectangle { Layout.preferredWidth: Math.min(330, content.width*0.35); Layout.minimumWidth: 260;
+                    Layout.preferredHeight: shopColumn.implicitHeight + 32;
+                    color: Theme.surface; border.color: Theme.border; radius: 16
+                    ColumnLayout { id: shopColumn; anchors.fill: parent; anchors.margins: 16; spacing: 10
+                        RowLayout { Layout.fillWidth: true
+                            Text { text: "Zakupy"; font.pixelSize: Math.max(11, Math.round(20 * backend.fontScale / 100)); font.bold: true; color: Theme.text; Layout.fillWidth: true }
+                            ActionButton { text: "Otwórz →"; compact: true; primary: false; onClicked: page.openShopping() }
                         }
+                        Repeater { model: Math.min(backend.shoppingItems.length, 6)
+                            delegate: ShoppingRow { Layout.fillWidth: true; item: backend.shoppingItems[index];
+                                onCheckRequested: backend.setShoppingDone(itemId, bought) }
+                        }
+                        Text { text: backend.dashboard.shopping + " rzeczy do kupienia";
+                            font.pixelSize: Math.max(11, Math.round(13 * backend.fontScale / 100)); color: Theme.muted }
                     }
-                    Rectangle {
-                        id: shoppingCard
-                        width: parent.width
-                        height: shoppingContent.implicitHeight + 35
-                        radius: 18; color: Theme.surface; border.color: Theme.border
-                        Column {
-                            id: shoppingContent
-                            x: 18; y: 18; width: parent.width - 36; spacing: 10
-                            RowLayout {
-                                height: 35; width: parent.width
-                                Text { text: "Lista zakupów"; font.pixelSize: 18; font.bold: true; color: Theme.text; Layout.fillWidth: true }
-                                Button {
-                                    id: openShoppingButton
-                                    text: "Otwórz →"; flat: true
-                                    contentItem: Text { text: openShoppingButton.text; font.bold: true; color: Theme.accent; font.pixelSize: 12; verticalAlignment: Text.AlignVCenter }
-                                    onClicked: { /* Nawigacja przez sygnał do App.qml */ page.openShopping() }
-                                }
+                }
+            }
+            Rectangle { Layout.fillWidth: true; visible: page.overdue.length > 0;
+                Layout.preferredHeight: overdueContent.implicitHeight + 38;
+                color: Theme.warningSoft; border.color: Theme.border; radius: 16
+                ColumnLayout { id: overdueContent; anchors.fill: parent; anchors.margins: 18; spacing: 9
+                    RowLayout { Layout.fillWidth: true
+                        Text { text: "Zaległe zadania — wybierz, co przenieść";
+                            color: Theme.warning; font.bold: true; font.pixelSize: Math.max(11, Math.round(17 * backend.fontScale / 100)); Layout.fillWidth: true }
+                        ActionButton { text: "Przenieś zaznaczone na dziś"; compact: true;
+                            enabled: page.selectedOverdue.length > 0; onClicked: {
+                                if (backend.moveOverdueSelection(page.selectedOverdue, backend.today))
+                                    page.selectedOverdue = []
+                            } }
+                    }
+                    Repeater { model: page.overdue
+                        delegate: CheckBox { Layout.fillWidth: true
+                            text: modelData.startDate + " · " + modelData.title + " · " + (modelData.memberName || "Wszyscy")
+                            font.pixelSize: Math.max(11, Math.round(14 * backend.fontScale / 100)); checked: page.selectedOverdue.indexOf(modelData.id) >= 0
+                            onToggled: {
+                                var a = page.selectedOverdue.slice(); var i = a.indexOf(modelData.id)
+                                if (checked && i < 0) a.push(modelData.id)
+                                else if (!checked && i >= 0) a.splice(i,1)
+                                page.selectedOverdue = a
                             }
-                            Text { text: "Lista jest pusta — dodaj produkty w zakładce Zakupy."; visible: backend.shoppingItems.length === 0; color: Theme.muted; wrapMode: Text.WordWrap; font.pixelSize: 13; width: parent.width; topPadding: 8; bottomPadding: 9 }
-                            Repeater {
-                                model: Math.min(backend.shoppingItems.length, 6)
-                                delegate: ShoppingRow {
-                                    width: shoppingContent.width
-                                    item: backend.shoppingItems[index]
-                                    onCheckRequested: backend.setShoppingDone(itemId, bought)
-                                }
-                            }
-                            Text { text: counts.shopping + " do kupienia"; color: Theme.muted; font.pixelSize: 12; topPadding: 6 }
                         }
                     }
                 }
             }
+            Rectangle { Layout.fillWidth: true; Layout.preferredHeight: notesColumn.implicitHeight + 30;
+                radius: 16; color: Theme.surface; border.color: Theme.border
+                ColumnLayout { id: notesColumn; anchors.fill: parent; anchors.margins: 15; spacing: 7
+                    Text { text: "Notatki dla domowników"; color: Theme.text; font.pixelSize: Math.max(11, Math.round(18 * backend.fontScale / 100)); font.bold: true }
+                    RowLayout { Layout.fillWidth: true
+                        FormInput { id: noteInput; Layout.fillWidth: true; placeholderText: "Zostaw krótką wiadomość..."; maximumLength: 600 }
+                        ActionButton { text: "Dodaj"; compact: true; onClicked: {
+                            if (backend.addNote(noteInput.text)) noteInput.clear()
+                        } }
+                    }
+                    Repeater { model: page.notesList
+                        delegate: RowLayout { Layout.fillWidth: true; spacing: 8
+                            Text { text: "• " + modelData.text; color: Theme.text; font.pixelSize: Math.max(11, Math.round(14 * backend.fontScale / 100));
+                                Layout.fillWidth: true; wrapMode: Text.WordWrap }
+                            ActionButton { text: "×"; compact: true; danger: true; primary: false;
+                                onClicked: backend.removeNote(modelData.id) }
+                        }
+                    }
+                }
+            }
+            Text { text: page.statusMessage; visible: page.statusMessage.length > 0; color: Theme.accent;
+                font.pixelSize: Math.max(11, Math.round(13 * backend.fontScale / 100)); Layout.fillWidth: true; wrapMode: Text.WordWrap }
         }
     }
-    signal openShopping()
-    QuickTaskPopup { id: quickTaskPopup }
-    AssignmentDialog { id: assignmentDialog }
-    CopyDayDialog {
-        id: copyDayDialog
-        onCopied: page.statusMessage = message
+    QuickTaskPopup { id: quickPopup }
+    TaskEditor { id: taskEditor; onSaved: page.statusMessage = "Zapisano zadanie." }
+    TaskActions { id: taskActions
+        onEditRequested: { taskEditor.taskId = taskId; taskEditor.open() }
+        onSubtasksRequested: { subtasks.taskId=taskId; subtasks.date=day; subtasks.open() }
+        onAssignmentRequested: { assignment.taskId = taskId; assignment.taskTitle = taskActions.task.title;
+            assignment.currentMemberId = taskActions.task.memberId; assignment.open() }
+        onSuccess: page.statusMessage = message
     }
+    AssignmentDialog { id: assignment }
+    SubtasksDialog { id: subtasks }
+    CopyDayDialog { id: copyDayDialog; onCopied: page.statusMessage = message }
+    DayTemplatesDialog { id: dayTemplatesDialog }
     function selectedAssignee() {
-        var options = backend.assignees
-        return todayAssignee.currentIndex >= 0 && todayAssignee.currentIndex < options.length
-            ? options[todayAssignee.currentIndex].id : -1
+        var choices = backend.assignees
+        return assigneeBox.currentIndex >= 0 && assigneeBox.currentIndex < choices.length
+            ? choices[assigneeBox.currentIndex].id : -1
     }
-    function openQuickTask() {
-        quickTaskPopup.targetDate = backend.today
-        quickTaskPopup.selectedMemberId = selectedAssignee()
-        quickTaskPopup.open()
-    }
-    function addQuickTask() {
-        if (backend.addTask(taskInput.text, backend.today, "once", 0, selectedAssignee())) {
-            taskInput.clear()
-            page.statusMessage = "Zadanie zostało zapisane."
+    function addCustom() {
+        if (backend.addTask(quickInput.text, backend.today, "once", 0, selectedAssignee())) {
+            quickInput.clear(); page.statusMessage = "Zadanie dodane."
         }
     }
+    function newTask() { taskEditor.taskId = -1; taskEditor.initialDate = backend.today; taskEditor.open() }
+    function openQuickTask() { quickPopup.targetDate = backend.today; quickPopup.selectedMemberId = selectedAssignee(); quickPopup.open() }
+    function editAssignee(task) { assignment.taskId = task.id; assignment.taskTitle = task.title;
+        assignment.currentMemberId = task.memberId; assignment.open() }
+    function openActions(task) { taskActions.task = task; taskActions.day = backend.today; taskActions.open() }
 }

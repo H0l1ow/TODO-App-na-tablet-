@@ -12,88 +12,68 @@ Item {
     signal archiveRequested(int taskId)
     signal assigneeRequested(int taskId)
     signal copyRequested(int taskId)
-    implicitHeight: 73
+    signal actionRequested(int taskId)
+    implicitHeight: 78
 
     RowLayout {
         anchors.fill: parent
-        spacing: 8
+        spacing: 9
         Rectangle {
-            Layout.preferredWidth: 36
-            Layout.preferredHeight: 36
-            radius: 9
-            color: root.task.done ? Theme.accent : Theme.surface
-            border.color: root.task.done ? Theme.accent : Theme.border
-            border.width: 2
-            Text {
-                text: "✓"; anchors.centerIn: parent
-                color: Theme.accentText; font.pixelSize: 18; font.bold: true
-                visible: !!root.task.done
-            }
-            MouseArea { anchors.fill: parent; onClicked: root.checkRequested(root.task.id, !root.task.done) }
+            Layout.preferredWidth: 54; Layout.preferredHeight: 54
+            radius: 13
+            color: task.done ? Theme.accent : Theme.surfaceMuted
+            border.width: 2; border.color: task.done ? Theme.accent : Theme.border
+            Text { anchors.centerIn: parent; text: task.done ? "✓" : task.skipped ? "—" : "";
+                   font.pixelSize: Math.max(11, Math.round(24 * backend.fontScale / 100)); font.bold: true; color: task.done ? Theme.accentText : Theme.muted }
+            MouseArea { anchors.fill: parent; onClicked: root.checkRequested(task.id, !task.done) }
         }
         ColumnLayout {
             Layout.fillWidth: true
-            spacing: 4
+            spacing: 3
             Text {
+                Layout.fillWidth: true
                 text: root.task.title || ""
-                font.family: "Segoe UI"
-                font.pixelSize: 15
+                font.pixelSize: Math.round(18 * backend.fontScale / 100)
                 font.bold: !root.task.done
                 font.strikeout: !!root.task.done
-                color: root.task.done ? Theme.muted : Theme.text
+                color: root.task.done || root.task.skipped ? Theme.muted : Theme.text
+                wrapMode: Text.Wrap
+                maximumLineCount: 2
                 elide: Text.ElideRight
-                Layout.fillWidth: true
             }
             Text {
-                text: root.task.recurrence === "daily" ? "↻ Codziennie" : root.task.recurrence === "weekly" ? "↻ Co tydzień" : "Jednorazowe"
-                font.pixelSize: 11
-                color: Theme.muted
                 Layout.fillWidth: true
+                text: (task.skipped ? "Pominięte" :
+                    task.recurrence === "monthly" ? "↻ Co miesiąc" :
+                    task.recurrence === "interval" ? "↻ Co " + task.intervalDays + " dni" :
+                    task.recurrence === "daily" ? "↻ Codziennie" :
+                    task.recurrence === "weekly" ? "↻ W wybrane dni" : "Jednorazowe")
+                    + (task.categoryName ? " · " + task.categoryName : "")
+                    + (task.dueTime ? " · " + task.dueTime : "")
+                font.pixelSize: Math.max(11, Math.round(12 * backend.fontScale / 100)); color: task.skipped ? Theme.warning : Theme.muted
+                elide: Text.ElideRight
             }
         }
         Button {
             id: personButton
-            Layout.preferredWidth: root.width < 500 ? 84 : 112
-            Layout.preferredHeight: 38
-            ToolTip.visible: hovered
-            ToolTip.text: "Zmień osobę przypisaną do zadania"
-            background: Rectangle { radius: 12; color: Theme.accentSoft; border.color: Theme.border }
-            contentItem: Text {
-                text: (root.task.memberName || "Wszyscy") + " ▾"
-                color: Theme.accent
-                font.pixelSize: 12; font.bold: true
-                horizontalAlignment: Text.AlignHCenter
-                verticalAlignment: Text.AlignVCenter
-                elide: Text.ElideRight
-            }
-            onClicked: root.assigneeRequested(root.task.id)
+            Layout.preferredWidth: root.width < 510 ? 90 : 122
+            Layout.preferredHeight: 49
+            text: task.memberName || "Wszyscy"
+            background: Rectangle { color: Theme.accentSoft; radius: 11; border.color: Theme.border }
+            contentItem: Text { text: personButton.text + " ▾"; horizontalAlignment: Text.AlignHCenter;
+                verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight; color: Theme.accent; font.pixelSize: Math.max(11, Math.round(13 * backend.fontScale / 100)); font.bold: true }
+            onClicked: root.assigneeRequested(task.id)
         }
         Button {
-            id: nextButton
-            visible: root.showCopy
-            Layout.preferredWidth: 77
-            Layout.preferredHeight: 38
-            ToolTip.visible: hovered
-            ToolTip.text: "Kopiuj to zadanie na następny dzień"
-            background: Rectangle { radius: 12; color: Theme.surfaceMuted; border.color: Theme.border }
-            contentItem: Text {
-                text: "→ Jutro"
-                color: Theme.text
-                font.pixelSize: 12; font.bold: true
-                horizontalAlignment: Text.AlignHCenter
-                verticalAlignment: Text.AlignVCenter
-            }
-            onClicked: root.copyRequested(root.task.id)
-        }
-        Button {
-            visible: root.showArchive
-            Layout.preferredWidth: 31; Layout.preferredHeight: 38
-            ToolTip.visible: hovered
-            ToolTip.text: "Archiwizuj zadanie"
-            background: Rectangle { color: "transparent"; radius: 7 }
-            contentItem: Text { text: "×"; color: Theme.muted; font.pixelSize: 23; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
-            onClicked: root.archiveRequested(root.task.id)
+            id: moreButton
+            Layout.preferredWidth: 50; Layout.preferredHeight: 49
+            text: "⋯"
+            background: Rectangle { color: moreButton.down ? Theme.accentSoft : Theme.surfaceMuted;
+                radius: 11; border.color: Theme.border }
+            contentItem: Text { text: moreButton.text; color: Theme.text;
+                font.pixelSize: Math.max(11, Math.round(25 * backend.fontScale / 100)); horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+            onClicked: root.actionRequested(task.id)
         }
     }
-    Rectangle { width: parent.width; height: 1; anchors.bottom: parent.bottom; color: Theme.border }
+    Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 1; color: Theme.border }
 }

@@ -5,78 +5,101 @@ import "../components"
 
 Item {
     id: page
-    property string backupMessage: ""
-    Flickable {
-        id: scroll; anchors.fill: parent; clip: true
-        contentWidth: width; contentHeight: content.height + 50
+    property string feedback: ""
+    property var backups: backend.availableBackups()
+
+    Flickable { anchors.fill: parent; clip: true; contentWidth: width;
+        contentHeight: content.implicitHeight + 50
         ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
-        Column {
-            id: content; x: 26; y: 26; width: scroll.width - 52; spacing: 18
-            Text { text: "Ustawienia"; font.pixelSize: 30; font.bold: true; color: Theme.text }
-            Text { text: "Bez kont, bez chmury i bez połączenia z internetem."; font.pixelSize: 14; color: Theme.muted }
-            Rectangle {
-                width: parent.width; height: themeContent.implicitHeight + 40
-                radius: 18; color: Theme.surface; border.color: Theme.border
-                Column {
-                    id: themeContent; x: 20; y: 20; width: parent.width - 40; spacing: 13
-                    Text { text: "Wygląd"; font.pixelSize: 20; font.bold: true; color: Theme.text }
-                    Text { text: "Tryb automatyczny: ciemny od 21:00 do 7:00 (zegar tabletu)."; font.pixelSize: 13; color: Theme.muted; width: parent.width; wrapMode: Text.WordWrap }
-                    Row {
-                        spacing: 10; width: parent.width; height: 45
+        ColumnLayout { id: content; x: 24; y: 22; width: parent.width-48; spacing: 16
+            Text { text: "Ustawienia urządzenia"; font.pixelSize: Math.max(11, Math.round(30 * backend.fontScale / 100)); font.bold: true; color: Theme.text }
+            Text { text: "Wszystkie dane pozostają na tablecie. Żadne zadania nie są wysyłane do internetu.";
+                font.pixelSize: Math.max(11, Math.round(14 * backend.fontScale / 100)); color: Theme.muted; Layout.fillWidth: true; wrapMode: Text.WordWrap }
+            Rectangle { Layout.fillWidth: true; Layout.preferredHeight: appearance.implicitHeight+35;
+                radius: 16; color: Theme.surface; border.color: Theme.border
+                ColumnLayout { id: appearance; anchors.fill: parent; anchors.margins: 16; spacing: 10
+                    Text { text: "Wygląd i czytelność"; font.pixelSize: Math.max(11, Math.round(20 * backend.fontScale / 100)); font.bold: true; color: Theme.text }
+                    RowLayout { Layout.fillWidth: true; spacing: 8
                         ActionButton { text: "☀ Jasny"; primary: backend.themeMode === "light"; onClicked: backend.setThemeMode("light") }
                         ActionButton { text: "☾ Ciemny"; primary: backend.themeMode === "dark"; onClicked: backend.setThemeMode("dark") }
                         ActionButton { text: "◷ Auto"; primary: backend.themeMode === "auto"; onClicked: backend.setThemeMode("auto") }
                     }
+                    Text { text: "Tryb automatyczny: 21:00–07:00 według zegara tabletu.";
+                        color: Theme.muted; font.pixelSize: Math.max(11, Math.round(12 * backend.fontScale / 100)) }
+                    RowLayout { Layout.fillWidth: true
+                        Text { text: "Skala czcionek: " + backend.fontScale + "%"; font.pixelSize: Math.max(11, Math.round(14 * backend.fontScale / 100)); color: Theme.text }
+                        Slider { id: sizeSlider; Layout.fillWidth: true; from: 85; to: 135; stepSize: 5;
+                            value: backend.fontScale; onMoved: backend.setFontScale(Math.round(value)) }
+                    }
                 }
             }
-            Rectangle {
-                width: parent.width; height: backupContent.implicitHeight + 40
-                radius: 18; color: Theme.surface; border.color: Theme.border
-                Column {
-                    id: backupContent; x: 20; y: 20; width: parent.width - 40; spacing: 12
-                    Text { text: "Bezpieczeństwo danych"; font.pixelSize: 20; font.bold: true; color: Theme.text }
-                    Text { text: "Dane są zapisywane automatycznie w SQLite. Kopię JSON można przenieść na pendrive."; font.pixelSize: 13; color: Theme.muted; width: parent.width; wrapMode: Text.WordWrap }
-                    Row { spacing: 10; height: 46
-                        ActionButton {
-                            text: "Utwórz kopię"; onClicked: {
-                                var path = backend.backupNow()
-                                page.backupMessage = path ? "Zapisano: " + path : "Nie udało się zapisać kopii."
-                            }
+            Rectangle { Layout.fillWidth: true; Layout.preferredHeight: backupContent.implicitHeight+35;
+                radius: 16; color: Theme.surface; border.color: Theme.border
+                ColumnLayout { id: backupContent; anchors.fill: parent; anchors.margins: 16; spacing: 11
+                    Text { text: "Ręczna kopia zapasowa"; font.pixelSize: Math.max(11, Math.round(20 * backend.fontScale / 100)); font.bold: true; color: Theme.text }
+                    Text { text: "Automatyczne kopie są wyłączone. Możesz utworzyć kopię JSON w Dokumentach lub wskazanym folderze USB.";
+                        color: Theme.muted; font.pixelSize: Math.max(11, Math.round(14 * backend.fontScale / 100)); Layout.fillWidth: true; wrapMode: Text.WordWrap }
+                    ActionButton { text: "Zapisz kopię w Dokumentach"; onClicked: {
+                        var path=backend.backupNow(); page.feedback=path ? "Zapisano: "+path : backend.errorMessage
+                        page.backups=backend.availableBackups()
+                    } }
+                    RowLayout { Layout.fillWidth: true
+                        FormInput { id: usbDir; Layout.fillWidth: true; placeholderText: "Folder pendrive, np. E:\\" }
+                        ActionButton { text: "Eksportuj na USB"; compact: true; primary: false;
+                            onClicked: {
+                                var output=backend.backupToDirectory(usbDir.text)
+                                page.feedback=output ? "Zapisano kopię USB: "+output : backend.errorMessage
+                                page.backups=backend.availableBackups()
+                            } }
+                    }
+                    Text { text: "Przywróć wybraną kopię (zastępuje obecne dane):";
+                        color: Theme.text; font.pixelSize: Math.max(11, Math.round(14 * backend.fontScale / 100)) }
+                    ListView { Layout.fillWidth: true; Layout.preferredHeight: Math.min(260,Math.max(58,page.backups.length*55));
+                        model: page.backups; clip: true; spacing: 6
+                        delegate: RowLayout { width: ListView.view ? ListView.view.width - 4 : 560; height: 52
+                            Text { text: modelData.modified + " · " + modelData.name; Layout.fillWidth: true;
+                                font.pixelSize: Math.max(11, Math.round(12 * backend.fontScale / 100)); color: Theme.text; elide: Text.ElideRight }
+                            ActionButton { text: "Przywróć"; danger: true; primary: false; compact: true;
+                                onClicked: { page.restorePath=modelData.path; confirmRestore.open() } }
                         }
-                        ActionButton { text: "Przywróć ostatnią kopię"; primary: false; danger: true; onClicked: restorePopup.open() }
                     }
-                    Text { text: page.backupMessage; visible: page.backupMessage.length > 0; font.pixelSize: 12; color: Theme.accent; width: parent.width; wrapMode: Text.WrapAnywhere }
-                    Text { text: "Folder kopii: Dokumenty / DomowyPlan"; font.pixelSize: 12; color: Theme.muted }
-                }
-            }
-            Rectangle {
-                width: parent.width; height: databaseColumn.implicitHeight + 36
-                radius: 18; color: Theme.surface; border.color: Theme.border
-                Column {
-                    id: databaseColumn; x: 20; y: 18; width: parent.width - 40; spacing: 9
-                    Text { text: "Urządzenie"; color: Theme.text; font.pixelSize: 20; font.bold: true }
-                    Text { text: "Lokalizacja bazy danych:"; color: Theme.muted; font.pixelSize: 12 }
-                    Text { text: backend.databasePath; color: Theme.text; font.pixelSize: 12; wrapMode: Text.WrapAnywhere; width: parent.width }
-                    Text { text: "F11 — przełącz pełny ekran. Data i godzina pochodzą z Windows."; color: Theme.muted; font.pixelSize: 12; width: parent.width; wrapMode: Text.WordWrap }
-                    Row { height: 43; spacing: 10
-                        ActionButton { text: "Zamknij aplikację"; primary: false; onClicked: backend.exitApplication() }
+                    ActionButton { text: "Odśwież listę kopii"; compact: true; primary: false;
+                        onClicked: page.backups=backend.availableBackups() }
+                    RowLayout { Layout.fillWidth: true
+                        FormInput { id: restoreFromUsb; Layout.fillWidth: true;
+                            placeholderText: "Ścieżka do kopii na USB, np. E:\\domowy-plan-....json" }
+                        ActionButton { text: "Otwórz kopię USB"; compact: true; primary: false;
+                            onClicked: { page.restorePath = restoreFromUsb.text; confirmRestore.open() } }
                     }
                 }
             }
+            Rectangle { Layout.fillWidth: true; Layout.preferredHeight: infoContent.implicitHeight+35;
+                radius: 16; color: Theme.surface; border.color: Theme.border
+                ColumnLayout { id: infoContent; anchors.fill: parent; anchors.margins: 16; spacing: 10
+                    Text { text: "Informacje techniczne"; font.pixelSize: Math.max(11, Math.round(20 * backend.fontScale / 100)); font.bold: true; color: Theme.text }
+                    Text { text: "Wersja 0.4.0 · Qt 5.15.2 · Windows x86"; color: Theme.text; font.pixelSize: Math.max(11, Math.round(14 * backend.fontScale / 100)) }
+                    Text { text: "Baza SQLite: " + backend.databasePath;
+                        color: Theme.muted; Layout.fillWidth: true; wrapMode: Text.WrapAnywhere; font.pixelSize: Math.max(11, Math.round(13 * backend.fontScale / 100)) }
+                    Text { text: "Rozmiar pliku bazy: " + Math.ceil(backend.databaseBytes/1024) + " KB";
+                        color: Theme.muted; font.pixelSize: Math.max(11, Math.round(13 * backend.fontScale / 100)) }
+                    Text { text: "Data z systemu: " + backend.today + ". Upewnij się, że zegar jest ustawiony prawidłowo.";
+                        color: Theme.muted; Layout.fillWidth: true; wrapMode: Text.WordWrap; font.pixelSize: Math.max(11, Math.round(12 * backend.fontScale / 100)) }
+                    RowLayout { Layout.fillWidth: true
+                        ActionButton { text: "Klawiatura Windows"; primary: false; onClicked: backend.showOnScreenKeyboard() }
+                        ActionButton { text: "Wyjdź z aplikacji"; danger: true; primary: false; onClicked: backend.exitApplication() }
+                    }
+                }
+            }
+            Text { text: page.feedback; font.pixelSize: Math.max(11, Math.round(13 * backend.fontScale / 100)); color: Theme.accent;
+                Layout.fillWidth: true; wrapMode: Text.WrapAnywhere }
         }
     }
-    Dialog {
-        id: restorePopup
-        title: "Przywrócić kopię?"
-        modal: true; x: (page.width-width)/2; y: (page.height-height)/2
-        standardButtons: Dialog.Yes | Dialog.No
-        onAccepted: {
-            if (backend.restoreLatestBackup()) page.backupMessage = "Przywrócono ostatnią kopię zapasową."
-            else page.backupMessage = "Nie udało się przywrócić kopii."
-        }
-        contentItem: Text {
-            text: "UWAGA: bieżące zadania, zakupy i ustawienia zostaną zastąpione przez dane z najnowszej kopii JSON."
-            width: 340; color: Theme.text; wrapMode: Text.WordWrap; topPadding: 12; bottomPadding: 12
-        }
+    property string restorePath: ""
+    Dialog { id: confirmRestore; title: "Na pewno przywrócić dane?"; modal: true;
+        x: (page.width-width)/2; y: (page.height-height)/2; standardButtons: Dialog.Yes | Dialog.No
+        onAccepted: { if (backend.restoreBackup(page.restorePath)) page.feedback="Przywrócono kopię.";
+            else page.feedback=backend.errorMessage }
+        contentItem: Text { width: 340; color: Theme.text; wrapMode: Text.WordWrap;
+            text: "Zastąpisz wszystkie bieżące zadania, zakupy i szablony zawartością wybranej kopii JSON." }
     }
 }

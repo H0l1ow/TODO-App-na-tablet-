@@ -5,74 +5,156 @@ import "../components"
 
 Item {
     id: page
-    Flickable {
-        id: scroll; anchors.fill: parent; clip: true
-        contentWidth: width; contentHeight: content.height + 42
+    property string info: ""
+    property var catalog: backend.shoppingCatalog()
+    property var setList: backend.shoppingSets()
+    property string groupFilter: "Wszystkie"
+    readonly property var groceryCategories: ["Podstawowe", "Nabiał", "Pieczywo", "Warzywa i owoce", "Mięso", "Chemia", "Inne"]
+    property var products: backend.shoppingItems
+    Connections { target: backend; function onDataChanged() {
+        page.catalog=backend.shoppingCatalog(); page.setList=backend.shoppingSets()
+    } }
+
+    Flickable { anchors.fill: parent; clip: true; contentWidth: width; contentHeight: content.implicitHeight + 55
         ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
-        Column {
-            id: content; x: 26; y: 26; width: scroll.width - 52; spacing: 18
-            Text { text: "Lista zakupów"; font.pixelSize: 30; font.bold: true; color: Theme.text }
-            Text { text: "Wpisz produkt i ilość. Dotknij kwadratu, gdy produkt trafi do koszyka."; color: Theme.muted; font.pixelSize: 14; wrapMode: Text.WordWrap; width: parent.width }
-            Rectangle {
-                width: parent.width; height: buyContent.implicitHeight + 40
-                radius: 18; color: Theme.surface; border.color: Theme.border
-                Column {
-                    id: buyContent; x: 20; y: 20; width: parent.width - 40; spacing: 13
-                    RowLayout {
-                        width: parent.width; spacing: 10
-                        FormInput {
-                            id: productName; Layout.fillWidth: true
-                            placeholderText: "Np. Mleko"; maximumLength: 120
-                            onAccepted: addProduct()
-                        }
-                        FormInput {
-                            id: productQuantity
-                            Layout.preferredWidth: 130
-                            placeholderText: "Ilość"; maximumLength: 40
-                            onAccepted: addProduct()
-                        }
-                        ActionButton { text: "+ Dodaj"; onClicked: addProduct() }
+        ColumnLayout { id: content; x: 24; y: 20; width: parent.width-48; spacing: 16
+            RowLayout { Layout.fillWidth: true
+                ColumnLayout { Layout.fillWidth: true
+                    Text { text: "Lista zakupów"; font.pixelSize: Math.max(11, Math.round(30 * backend.fontScale / 100)); font.bold: true; color: Theme.text }
+                    Text { text: "Najczęstsze produkty dodasz jednym dotknięciem.";
+                        color: Theme.muted; font.pixelSize: Math.max(11, Math.round(14 * backend.fontScale / 100)) }
+                }
+                ActionButton { text: "Ponów zakupy z 7 dni"; primary: false; compact: true;
+                    onClicked: { var r=backend.repeatRecentShopping(7);
+                        page.info = r.ok ? "Dodano " + r.added + " produktów." : "Brak zakupów do ponowienia." } }
+            }
+            Rectangle { Layout.fillWidth: true; Layout.preferredHeight: quickContent.implicitHeight + 30;
+                radius: 17; color: Theme.accentSoft; border.color: Theme.border
+                ColumnLayout { id: quickContent; anchors.fill: parent; anchors.margins: 14; spacing: 10
+                    RowLayout { Layout.fillWidth: true
+                        Text { text: "★  Szybkie produkty"; Layout.fillWidth: true;
+                            color: Theme.accent; font.bold: true; font.pixelSize: Math.max(11, Math.round(16 * backend.fontScale / 100)) }
+                        ActionButton { text: "Edytuj katalog"; compact: true; primary: false; onClicked: productDialog.open() }
                     }
-                    RowLayout {
-                        width: parent.width; height: 36
-                        Text { text: "Produkty"; font.pixelSize: 19; font.bold: true; color: Theme.text; Layout.fillWidth: true }
-                        Text { text: backend.dashboard.shopping + " do kupienia"; font.pixelSize: 12; color: Theme.muted }
-                    }
-                    Text { text: "Lista jest pusta. Dodaj pierwszy produkt."; visible: backend.shoppingItems.length === 0; color: Theme.muted; font.pixelSize: 14; topPadding: 16; bottomPadding: 18 }
-                    Repeater {
-                        model: backend.shoppingItems
-                        delegate: ShoppingRow {
-                            width: buyContent.width
-                            item: modelData
-                            canRemove: true
-                            onCheckRequested: backend.setShoppingDone(itemId, bought)
-                            onRemoveRequested: backend.removeShoppingItem(itemId)
-                        }
-                    }
-                    RowLayout {
-                        width: parent.width; height: 47
-                        Item { Layout.fillWidth: true }
-                        ActionButton {
-                            text: "Usuń kupione"; primary: false; compact: true
-                            enabled: backend.shoppingItems.length > backend.dashboard.shopping
-                            onClicked: clearPopup.open()
+                    Flow { Layout.fillWidth: true; height: Math.ceil(Math.min(12,page.catalog.length)/3)*58;
+                        spacing: 7
+                        Repeater { model: Math.min(12,page.catalog.length)
+                            delegate: ActionButton { text: "+ " + page.catalog[index].name; compact: true;
+                                primary: false; implicitHeight: 50
+                                onClicked: { if (!backend.addShoppingFromCatalog(page.catalog[index].id))
+                                    page.info=backend.errorMessage }
+                            }
                         }
                     }
                 }
             }
+            Rectangle { Layout.fillWidth: true; Layout.preferredHeight: listContent.implicitHeight+38;
+                radius: 16; color: Theme.surface; border.color: Theme.border
+                ColumnLayout { id: listContent; anchors.fill: parent; anchors.margins: 18; spacing: 12
+                    Text { text: "Dodaj własny produkt"; color: Theme.text; font.pixelSize: Math.max(11, Math.round(18 * backend.fontScale / 100)); font.bold: true }
+                    RowLayout { Layout.fillWidth: true; spacing: 9
+                        FormInput { id: productInput; Layout.fillWidth: true; placeholderText: "Nazwa produktu";
+                            maximumLength: 120; onAccepted: addProduct() }
+                        FormInput { id: quantityInput; Layout.preferredWidth: 105; placeholderText: "Ilość"; maximumLength: 40;
+                            onAccepted: addProduct() }
+                        ComboBox { id: categoryPicker; Layout.preferredWidth: 145; Layout.preferredHeight: 50;
+                            model: page.groceryCategories }
+                        ActionButton { text: "+ Dodaj"; onClicked: addProduct() }
+                    }
+                    CheckBox { id: rememberProduct; text: "Zapamiętaj produkt w katalogu"; checked: true; font.pixelSize: Math.max(11, Math.round(13 * backend.fontScale / 100)) }
+                    RowLayout { Layout.fillWidth: true
+                        Text { text: "Do kupienia (" + backend.dashboard.shopping + ")";
+                            Layout.fillWidth: true; font.pixelSize: Math.max(11, Math.round(19 * backend.fontScale / 100)); font.bold: true; color: Theme.text }
+                        ComboBox { Layout.preferredWidth: 160; Layout.preferredHeight: 47;
+                            model: ["Wszystkie"].concat(page.groceryCategories)
+                            onCurrentTextChanged: page.groupFilter=currentText }
+                    }
+                    Text { text: "Lista jest pusta."; visible: page.products.length === 0;
+                        Layout.fillWidth: true; font.pixelSize: Math.max(11, Math.round(14 * backend.fontScale / 100)); color: Theme.muted }
+                    ListView { Layout.fillWidth: true;
+                        property var filtered: page.products.filter(function(p) { return page.groupFilter === "Wszystkie" || p.category === page.groupFilter })
+                        Layout.preferredHeight: Math.max(80, Math.min(580, filtered.length*70))
+                        clip: true; spacing: 3; model: filtered
+                        ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
+                        delegate: ShoppingRow { width: ListView.view ? ListView.view.width - 5 : 500;
+                            item: modelData; canRemove: true; canAdjust: true
+                            onCheckRequested: backend.setShoppingDone(itemId, bought)
+                            onRemoveRequested: backend.removeShoppingItem(itemId)
+                            onQuantityRequested: backend.setShoppingQuantity(itemId, newQuantity) }
+                    }
+                    RowLayout { Layout.fillWidth: true
+                        Item { Layout.fillWidth: true }
+                        ActionButton { text: "Usuń kupione"; compact: true; danger: true; primary: false;
+                            enabled: page.products.length > backend.dashboard.shopping; onClicked: clearConfirm.open() }
+                    }
+                }
+            }
+            Rectangle { Layout.fillWidth: true; Layout.preferredHeight: setsContent.implicitHeight+36;
+                radius: 16; color: Theme.surface; border.color: Theme.border
+                ColumnLayout { id: setsContent; anchors.fill: parent; anchors.margins: 17; spacing: 12
+                    Text { text: "Zestawy zakupowe"; color: Theme.text; font.pixelSize: Math.max(11, Math.round(20 * backend.fontScale / 100)); font.bold: true }
+                    RowLayout { Layout.fillWidth: true
+                        FormInput { id: setName; Layout.fillWidth: true; placeholderText: "Np. Cotygodniowe zakupy"; maximumLength: 70 }
+                        ActionButton { text: "Zapisz listę jako zestaw"; compact: true; primary: false;
+                            onClicked: { if (backend.saveShoppingSet(setName.text)) { page.info="Zapisano zestaw."; setName.clear() }
+                                else page.info=backend.errorMessage } }
+                    }
+                    Repeater { model: page.setList
+                        delegate: RowLayout { Layout.fillWidth: true
+                            Text { text: modelData.name + " (" + modelData.count + " pozycji)";
+                                Layout.fillWidth: true; font.pixelSize: Math.max(11, Math.round(15 * backend.fontScale / 100)); color: Theme.text }
+                            ActionButton { text: "Wstaw"; compact: true; onClicked: {
+                                var r = backend.applyShoppingSet(modelData.id)
+                                page.info = r.ok ? "Dodano " + r.added + " produktów." : "Nie można dodać zestawu."
+                            } }
+                            ActionButton { text: "Usuń"; danger: true; primary: false; compact: true;
+                                onClicked: backend.deleteShoppingSet(modelData.id) }
+                        }
+                    }
+                }
+            }
+            Text { text: page.info; color: Theme.accent; font.pixelSize: Math.max(11, Math.round(14 * backend.fontScale / 100)); Layout.fillWidth: true; wrapMode: Text.WordWrap }
         }
     }
     function addProduct() {
-        if (backend.addShoppingItem(productName.text, productQuantity.text)) {
-            productName.clear(); productQuantity.clear(); productName.forceActiveFocus()
+        if (backend.addShoppingItem(productInput.text, quantityInput.text, categoryPicker.currentText)) {
+            if (rememberProduct.checked)
+                backend.saveCatalogProduct(productInput.text, categoryPicker.currentText, quantityInput.text, false)
+            productInput.clear(); quantityInput.clear()
         }
     }
-    Dialog {
-        id: clearPopup
-        title: "Wyczyścić zakupione?"
-        modal: true; x: (page.width-width)/2; y: (page.height-height)/2
-        standardButtons: Dialog.Yes | Dialog.No
+    Dialog { id: clearConfirm; title: "Usunąć zakupione produkty?"; modal: true;
+        x: (page.width-width)/2; y: (page.height-height)/2; standardButtons: Dialog.Yes | Dialog.No
         onAccepted: backend.clearPurchased()
-        contentItem: Text { text: "Kupione pozycje zostaną usunięte z listy."; color: Theme.text; width: 300; wrapMode: Text.WordWrap; topPadding: 12; bottomPadding: 12 }
+        contentItem: Text { text: "Pozycje znikną z bieżącej listy. Historia zakupów pozostanie.";
+            width: 310; color: Theme.text; wrapMode: Text.WordWrap }
+    }
+    Dialog { id: productDialog; title: "Katalog szybkich produktów"; modal: true;
+        width: Math.min(630,page.width-30); height: Math.min(580,page.height-25);
+        x: (page.width-width)/2; y: (page.height-height)/2; standardButtons: Dialog.NoButton
+        background: Rectangle { color: Theme.surface; radius: 17; border.color: Theme.border }
+        contentItem: ColumnLayout { spacing: 10
+            Text { text: "Dodaj lub zaktualizuj ulubiony produkt."; color: Theme.muted; font.pixelSize: Math.max(11, Math.round(13 * backend.fontScale / 100)) }
+            RowLayout { Layout.fillWidth: true
+                FormInput { id: catalogName; Layout.fillWidth: true; placeholderText: "Nazwa"; maximumLength: 120 }
+                FormInput { id: catalogQuantity; Layout.preferredWidth: 80; placeholderText: "Ilość"; maximumLength: 40 }
+                ComboBox { id: catalogCategory; Layout.preferredWidth: 135; model: page.groceryCategories }
+                ActionButton { text: "Zapisz"; compact: true; onClicked: {
+                    if (backend.saveCatalogProduct(catalogName.text,catalogCategory.currentText,catalogQuantity.text,true))
+                        { catalogName.clear(); catalogQuantity.clear() }
+                } }
+            }
+            ListView { Layout.fillWidth: true; Layout.fillHeight: true; model: page.catalog; clip: true; spacing: 4
+                delegate: RowLayout { width: ListView.view ? ListView.view.width-5 : 540; height: 50
+                    Text { text: modelData.name + " · " + modelData.category;
+                        Layout.fillWidth: true; color: Theme.text; font.pixelSize: Math.max(11, Math.round(13 * backend.fontScale / 100)); elide: Text.ElideRight }
+                    ActionButton { text: modelData.favorite ? "★" : "☆"; compact: true; primary: false;
+                        onClicked: backend.toggleCatalogFavorite(modelData.id) }
+                    ActionButton { text: "×"; compact: true; danger: true; primary: false;
+                        onClicked: backend.deleteCatalogProduct(modelData.id) }
+                }
+            }
+            ActionButton { Layout.fillWidth: true; text: "Gotowe"; primary: false; onClicked: productDialog.close() }
+        }
     }
 }

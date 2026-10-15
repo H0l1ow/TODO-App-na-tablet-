@@ -7,7 +7,7 @@ TextField {
     implicitHeight: 46
     selectByMouse: true
     font.family: "Segoe UI"
-    font.pixelSize: 15
+    font.pixelSize: Math.max(11, Math.round(15 * backend.fontScale / 100))
     color: Theme.text
     placeholderTextColor: Theme.muted
     leftPadding: 14

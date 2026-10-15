@@ -21,8 +21,8 @@ Dialog {
     contentItem: Column {
         width: parent ? parent.width : 340
         spacing: 10
-        Text { width: parent.width; text: root.taskTitle; color: Theme.muted; font.pixelSize: 14; wrapMode: Text.WordWrap }
-        Text { text: "Wybierz osobę lub wspólne zadanie:"; color: Theme.text; font.pixelSize: 13 }
+        Text { width: parent.width; text: root.taskTitle; color: Theme.muted; font.pixelSize: Math.max(11, Math.round(14 * backend.fontScale / 100)); wrapMode: Text.WordWrap }
+        Text { text: "Wybierz osobę lub wspólne zadanie:"; color: Theme.text; font.pixelSize: Math.max(11, Math.round(13 * backend.fontScale / 100)) }
         Repeater {
             model: backend.assignees
             delegate: ActionButton {

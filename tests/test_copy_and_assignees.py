@@ -154,15 +154,21 @@ class CopyAndAssigneeTests(unittest.TestCase):
 
     def test_new_ui_components_integrated(self):
         qml = Path(__file__).resolve().parents[1] / "qml"
-        for filename in ("QuickTaskPopup.qml", "AssignmentDialog.qml", "CopyDayDialog.qml"):
+        for filename in ("QuickTaskPopup.qml", "AssignmentDialog.qml", "CopyDayDialog.qml",
+                         "TaskEditor.qml", "TaskActions.qml", "DayTemplatesDialog.qml"):
             self.assertTrue((qml / "components" / filename).is_file())
-        for filename in ("TodayPage.qml", "WeekPage.qml"):
-            data = (qml / "pages" / filename).read_text(encoding="utf-8")
-            for expected in ("QuickTaskPopup", "AssignmentDialog", "CopyDayDialog", "backend.assignees"):
-                self.assertIn(expected, data)
+        today = (qml / "pages" / "TodayPage.qml").read_text(encoding="utf-8")
+        for expected in ("QuickTaskPopup", "AssignmentDialog", "CopyDayDialog", "backend.assignees"):
+            self.assertIn(expected, today)
+        week = (qml / "pages" / "WeekPage.qml").read_text(encoding="utf-8")
+        for expected in ("QuickTaskPopup", "CopyDayDialog", "TaskEditor", "DayTemplatesDialog"):
+            self.assertIn(expected, week)
         backend = (Path(__file__).resolve().parents[1] / "src" / "Backend.cpp").read_text(encoding="utf-8")
         for function in ("Backend::setTaskAssignee", "Backend::copyOccurrence", "Backend::copyDayToNextDay"):
             self.assertIn(function, backend)
+        features = (Path(__file__).resolve().parents[1] / "src" / "BackendFeatures.cpp").read_text(encoding="utf-8")
+        for method in ("Backend::editTask", "Backend::copyDayToDate", "Backend::quickTemplates"):
+            self.assertIn(method, features)
 
 
 if __name__ == "__main__":

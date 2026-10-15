@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(DomowyPlan VERSION 0.3.0 LANGUAGES CXX)
+project(DomowyPlan VERSION 0.4.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -20,6 +20,7 @@ find_package(Qt5 5.15.2 EXACT REQUIRED COMPONENTS Core Gui Quick Qml Sql QuickCo
 add_executable(DomowyPlan WIN32
     src/main.cpp
     src/Backend.cpp
+    src/BackendFeatures.cpp
     src/Backend.h
     qml/resources.qrc
 )

@@ -18,7 +18,7 @@ Button {
             text: nav.iconText
             width: 25
             font.family: "Segoe UI Symbol"
-            font.pixelSize: 20
+            font.pixelSize: Math.max(11, Math.round(20 * backend.fontScale / 100))
             color: nav.selected ? Theme.accent : Theme.muted
             horizontalAlignment: Text.AlignHCenter
             anchors.verticalCenter: parent.verticalCenter
@@ -27,7 +27,7 @@ Button {
             text: nav.text
             font.family: "Segoe UI"
             font.bold: nav.selected
-            font.pixelSize: 15
+            font.pixelSize: Math.max(11, Math.round(15 * backend.fontScale / 100))
             color: nav.selected ? Theme.accent : Theme.muted
             anchors.verticalCenter: parent.verticalCenter
         }

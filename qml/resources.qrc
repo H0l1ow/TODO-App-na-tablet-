@@ -9,12 +9,17 @@
     <file>components/StatCard.qml</file>
     <file>components/TaskRow.qml</file>
     <file>components/QuickTaskPopup.qml</file>
+    <file>components/TaskEditor.qml</file>
+    <file>components/TaskActions.qml</file>
+    <file>components/DayTemplatesDialog.qml</file>
+    <file>components/SubtasksDialog.qml</file>
     <file>components/AssignmentDialog.qml</file>
     <file>components/CopyDayDialog.qml</file>
     <file>components/ShoppingRow.qml</file>
     <file>pages/TodayPage.qml</file>
     <file>pages/WeekPage.qml</file>
     <file>pages/ShoppingPage.qml</file>
+    <file>pages/QuickTemplatesPage.qml</file>
     <file>pages/MembersPage.qml</file>
     <file>pages/HistoryPage.qml</file>
     <file>pages/SettingsPage.qml</file>
