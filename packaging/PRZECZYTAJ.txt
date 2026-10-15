@@ -1,0 +1,17 @@
+DOMOWY PLAN - WINDOWS 10 32-BIT - PAKIET DO TABLETU
+
+Ten katalog powinien zawierac:
+DomowyPlan.exe, biblioteki Qt5*.dll, katalogi platforms, sqldrivers i qml.
+
+Aby zainstalowac bez praw administratora:
+1. Skopiuj caly katalog na tablet.
+2. Dwukrotnie kliknij ZAINSTALUJ.bat.
+3. Wybierz, czy aplikacja ma startowac wraz z Windows.
+4. Uruchamiaj przez skrot 'Domowy Plan' na pulpicie.
+
+Mozesz tez uruchomic bez instalacji: URUCHOM.bat
+URUCHOM_GPU.bat: wariant z domyslnym rendererem GPU.
+DIAGNOSTYKA.bat: otwiera lokalny dzien ostrzezen i bledow.
+ODINSTALUJ.bat: usuwa program, nie usuwa bazy ani kopii zapasowych.
+
+Nie trzeba laczyc tabletu z internetem.

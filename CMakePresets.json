@@ -1,0 +1,27 @@
+{
+  "version": 3,
+  "cmakeMinimumRequired": { "major": 3, "minor": 21, "patch": 0 },
+  "configurePresets": [
+    {
+      "name": "windows-x86-qt515-mingw81",
+      "displayName": "EDGE 1086 - Windows x86, Qt 5.15.2 + MinGW 8.1",
+      "generator": "MinGW Makefiles",
+      "binaryDir": "${sourceDir}/out/build-win32-release",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "BUILD_TESTING": "OFF",
+        "DOMOWYPLAN_REQUIRE_X86": "ON",
+        "CMAKE_PREFIX_PATH": "C:/Qt/5.15.2/mingw81_32",
+        "CMAKE_CXX_COMPILER": "C:/Qt/Tools/mingw810_32/bin/g++.exe",
+        "CMAKE_MAKE_PROGRAM": "C:/Qt/Tools/mingw810_32/bin/mingw32-make.exe"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "windows-x86-release",
+      "configurePreset": "windows-x86-qt515-mingw81",
+      "jobs": 2
+    }
+  ]
+}

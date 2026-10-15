@@ -1,0 +1,1 @@
+C:/Qt/5.15.2/mingw81_32/bin/qmake.exe

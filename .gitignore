@@ -1,0 +1,13 @@
+/out/
+/build/
+*.user
+*.user.*
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+__pycache__/
+*.pyc
+.DS_Store
+*.bat
+*.jpg
+*.png
